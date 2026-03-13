@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Family Board Test</title>
+  <style>
+    body { font-family: system-ui; padding: 20px; }
+    .test { margin: 20px 0; padding: 20px; border: 1px solid #ccc; border-radius: 8px; }
+    .pass { background: #d4edda; }
+    .fail { background: #f8d7da; }
+    button { margin: 5px; padding: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Family Achievement Board - Test Suite</h1>
+  
+  <div class="test" id="test1">
+    <h3>1. File Structure Test</h3>
+    <div id="result1">Checking...</div>
+  </div>
+  
+  <div class="test" id="test2">
+    <h3>2. CSS Loading Test</h3>
+    <div id="result2">Checking...</div>
+  </div>
+  
+  <div class="test" id="test3">
+    <h3>3. JavaScript Loading Test</h3>
+    <div id="result3">Checking...</div>
+  </div>
+  
+  <div class="test" id="test4">
+    <h3>4. Local Storage Test</h3>
+    <div id="result4">Checking...</div>
+    <button onclick="testLocalStorage()">Run Test</button>
+  </div>
+  
+  <div class="test" id="test5">
+    <h3>5. Service Worker Test</h3>
+    <div id="result5">Checking...</div>
+    <button onclick="testServiceWorker()">Run Test</button>
+  </div>
+  
+  <div class="test" id="test6">
+    <h3>6. Encryption Test</h3>
+    <div id="result6">Checking...</div>
+    <button onclick="testEncryption()">Run Test</button>
+  </div>
+  
+  <div style="margin-top: 30px;">
+    <button onclick="runAllTests()" style="padding: 15px; font-size: 16px;">Run All Tests</button>
+    <button onclick="window.open('./index.html', '_blank')" style="padding: 15px; font-size: 16px;">Open Main App</button>
+  </div>
+  
+  <script>
+    const tests = [
+      { id: 'test1', fn: testFileStructure },
+      { id: 'test2', fn: testCSS },
+      { id: 'test3', fn: testJavaScript },
+      { id: 'test4', fn: testLocalStorage },
+      { id: 'test5', fn: testServiceWorker },
+      { id: 'test6', fn: testEncryption }
+    ];
+    
+    function setResult(testId, passed, message) {
+      const element = document.getElementById(testId);
+      const resultDiv = element.querySelector('div[id^="result"]');
+      element.className = 'test ' + (passed ? 'pass' : 'fail');
+      resultDiv.textContent = message;
+    }
+    
+    async function testFileStructure() {
+      try {
+        const requiredFiles = [
+          'index.html',
+          'style.css',
+          'app.js',
+          'manifest.json',
+          'sw.js',
+          'fonts/Righteous-Regular.ttf',
+          'fonts/DMSans-VariableFont_opsz,wght.ttf',
+          'icons/icon-192.png'
+        ];
+        
+        const missing = [];
+        for (const file of requiredFiles) {
+          try {
+            const response = await fetch(file, { method: 'HEAD' });
+            if (!response.ok) missing.push(file);
+          } catch {
+            missing.push(file);
+          }
+        }
+        
+        if (missing.length === 0) {
+          setResult('test1', true, '✓ All required files present');
+          return true;
+        } else {
+          setResult('test1', false, `✗ Missing files: ${missing.join(', ')}`);
+          return false;
+        }
+      } catch (error) {
+        setResult('test1', false, `✗ Error: ${error.message}`);
+        return false;
+      }
+    }
+    
+    async function testCSS() {
+      try {
+        const response = await fetch('style.css');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const css = await response.text();
+        const hasVariables = css.includes('--bg') && css.includes('--card') && css.includes('--k1');
+        const hasAnimations = css.includes('@keyframes') && css.includes('confetti');
+        
+        if (hasVariables && hasAnimations) {
+          setResult('test2', true, '✓ CSS loaded with design tokens and animations');
+          return true;
+        } else {
+          setResult('test2', false, '✗ CSS missing required tokens or animations');
+          return false;
+        }
+      } catch (error) {
+        setResult('test2', false, `✗ Error loading CSS: ${error.message}`);
+        return false;
+      }
+    }
+    
+    async function testJavaScript() {
+      try {
+        const response = await fetch('app.js');
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        
+        const js = await response.text();
+        const hasSyncPoints = js.includes('SYNC POINT') && js.includes('load') && js.includes('save');
+        const hasEncryption = js.includes('AES-GCM') && js.includes('crypto.subtle');
+        
+        if (hasSyncPoints && hasEncryption) {
+          setResult('test3', true, '✓ JavaScript loaded with sync points and encryption');
+          return true;
+        } else {
+          setResult('test3', false, '✗ JavaScript missing required features');
+          return false;
+        }
+      } catch (error) {
+        setResult('test3', false, `✗ Error loading JavaScript: ${error.message}`);
+        return false;
+      }
+    }
+    
+    async function testLocalStorage() {
+      try {
+        const testKey = 'famboard-test';
+        const testData = { test: 'data', timestamp: Date.now() };
+        
+        localStorage.setItem(testKey, JSON.stringify(testData));
+        const retrieved = JSON.parse(localStorage.getItem(testKey));
+        localStorage.removeItem(testKey);
+        
+        if (retrieved && retrieved.test === 'data') {
+          setResult('test4', true, '✓ Local storage working correctly');
+          return true;
+        } else {
+          setResult('test4', false, '✗ Local storage test failed');
+          return false;
+        }
+      } catch (error) {
+        setResult('test4', false, `✗ Local storage error: ${error.message}`);
+        return false;
+      }
+    }
+    
+    async function testServiceWorker() {
+      try {
+        if (!('serviceWorker' in navigator)) {
+          setResult('test5', false, '✗ Service workers not supported');
+          return false;
+        }
+        
+        const registration = await navigator.serviceWorker.register('sw.js');
+        await navigator.serviceWorker.ready;
+        
+        if (registration.active) {
+          setResult('test5', true, '✓ Service worker registered and active');
+          return true;
+        } else {
+          setResult('test5', false, '✗ Service worker not active');
+          return false;
+        }
+      } catch (error) {
+        setResult('test5', false, `✗ Service worker error: ${error.message}`);
+        return false;
+      }
+    }
+    
+    async function testEncryption() {
+      try {
+        if (!window.crypto || !crypto.subtle) {
+          setResult('test6', false, '✗ Web Crypto API not available');
+          return false;
+        }
+        
+        // Test basic crypto operations
+        const encoder = new TextEncoder();
+        const data = encoder.encode('test');
+        const key = await crypto.subtle.generateKey(
+          { name: 'AES-GCM', length: 256 },
+          true,
+          ['encrypt', 'decrypt']
+        );
+        
+        const iv = crypto.getRandomValues(new Uint8Array(12));
+        const encrypted = await crypto.subtle.encrypt(
+          { name: 'AES-GCM', iv },
+          key,
+          data
+        );
+        
+        if (encrypted && encrypted.byteLength > 0) {
+          setResult('test6', true, '✓ Web Crypto API working');
+          return true;
+        } else {
+          setResult('test6', false, '✗ Encryption test failed');
+          return false;
+        }
+      } catch (error) {
+        setResult('test6', false, `✗ Crypto error: ${error.message}`);
+        return false;
+      }
+    }
+    
+    async function runAllTests() {
+      console.log('Running all tests...');
+      let passed = 0;
+      let total = 0;
+      
+      for (const test of tests) {
+        total++;
+        const result = await test.fn();
+        if (result) passed++;
+        await new Promise(resolve => setTimeout(resolve, 500)); // Delay between tests
+      }
+      
+      console.log(`Tests complete: ${passed}/${total} passed`);
+      alert(`Tests complete: ${passed}/${total} passed`);
+    }
+    
+    // Run basic tests on load
+    window.addEventListener('load', () => {
+      testFileStructure();
+      testCSS();
+      testJavaScript();
+    });
+  </script>
+</body>
+</html>
