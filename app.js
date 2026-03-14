@@ -1,5 +1,5 @@
 // Family Achievement Board - Complete JavaScript
-const STORAGE_KEY = 'famboard-v4';
+const STORAGE_KEY = 'famboard-v5';
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const PARENT_PIN = null; // Default PIN - should be configurable, null means not set
 const AUTO_APPROVE_HOURS = 48;
@@ -11,16 +11,16 @@ const formatDate = (ts) => new Date(ts).toLocaleDateString('en-US', { weekday: '
 
 // SYNC POINT: Default state structure
 const stateDefault = () => ({
-  version: 4, // Increment version for new payout formula with rejected chore penalties
+  version: 5, // New version for updated scoring system with frequency chores
   weekStart: getWeekStart(),
   config: {
-    base: 0, // Starting payout (changed from 20 to 0)
-    rate: 2.5,
-    penalty: 1,
+    base: 20, // Starting payout per kid per week
+    pointValue: 0.20, // $0.20 per point ($20 ÷ 100 points)
     maxPay: 30, // Maximum payout amount
-    weekGoal: 50, // Weekly goal for approved points (point value, not chore count)
+    weekGoal: 100, // Weekly goal for approved points (increased from 50)
     parentPin: PARENT_PIN,
-    autoApproveHours: AUTO_APPROVE_HOURS
+    autoApproveHours: AUTO_APPROVE_HOURS,
+    gradeBonusPerSubject: 2.50 // $2.50 per improved subject
   },
   kids: [
     {
@@ -199,6 +199,51 @@ function load() {
       saved.version = 4;
     }
     
+    // Migration from v4 to v5
+    if (saved.version === 4) {
+      console.log('Migrating from v4 to v5');
+      
+      // Update config for new scoring system
+      if (saved.config) {
+        saved.config.base = 20; // Starting at $20
+        saved.config.pointValue = 0.20; // $0.20 per point
+        saved.config.weekGoal = 100; // Increased from 50
+        saved.config.gradeBonusPerSubject = 2.50; // $2.50 per improved subject
+        
+        // Remove old fields if they exist
+        delete saved.config.rate;
+        delete saved.config.penalty;
+      }
+      
+      // Update all chores to add frequency and extra credit fields
+      if (saved.chores && Array.isArray(saved.chores)) {
+        saved.chores.forEach(chore => {
+          // Add frequency field (default to 'weekly' for existing chores)
+          if (!chore.frequency) {
+            chore.frequency = 'weekly';
+          }
+          
+          // Add instances tracking (default to 1/1 for existing chores)
+          if (!chore.instances) {
+            chore.instances = {
+              total: 1,
+              completed: chore.status === 'approved' || chore.status === 'pending' ? 1 : 0
+            };
+          }
+          
+          // Add extra credit field
+          if (!chore.extra) {
+            chore.extra = {
+              enabled: false,
+              points: 0
+            };
+          }
+        });
+      }
+      
+      saved.version = 5;
+    }
+    
     // Merge with defaults for any new properties
     const merged = { ...stateDefault(), ...saved };
     
@@ -278,7 +323,7 @@ function showSetupModal() {
   document.getElementById('setupKid1Emoji').value = '👧';
   document.getElementById('setupKid2Name').value = 'Kid 2';
   document.getElementById('setupKid2Emoji').value = '👩';
-  document.getElementById('setupWeeklyPoints').value = 50;
+  document.getElementById('setupWeeklyPoints').value = 100;
   document.getElementById('setupMaxPayout').value = 30;
   document.getElementById('setupParentPin').value = '';
   
@@ -291,7 +336,7 @@ function handleSetupSubmit() {
   const kid1Emoji = document.getElementById('setupKid1Emoji').value.trim() || '👧';
   const kid2Name = document.getElementById('setupKid2Name').value.trim() || 'Kid 2';
   const kid2Emoji = document.getElementById('setupKid2Emoji').value.trim() || '👩';
-  const weeklyPoints = parseInt(document.getElementById('setupWeeklyPoints').value) || 50;
+  const weeklyPoints = parseInt(document.getElementById('setupWeeklyPoints').value) || 100;
   const maxPayout = parseInt(document.getElementById('setupMaxPayout').value) || 30;
   const parentPin = document.getElementById('setupParentPin').value.trim();
   
@@ -365,6 +410,15 @@ function autoApprove48h() {
     if (c.status === 'pending' && c.completedAt && c.completedAt <= cut) {
       c.status = 'approved';
       c.autoApproved = true;
+      
+      // For frequency chores: mark all instances as completed
+      if (c.instances && c.instances.total > 1) {
+        c.instances.completed = c.instances.total;
+      }
+      
+      // No extra credit for auto-approve
+      c.extra = { enabled: false, points: 0 };
+      
       changed = true;
       confetti();
       state.logs.unshift(`${new Date().toLocaleString()}: Auto-approved "${c.name}" after ${state.config.autoApproveHours}h`);
@@ -379,108 +433,132 @@ const gradeRank = {
   'A': 4, 'B': 3, 'C': 2, 'D': 1, 'F': 0
 };
 
-// Calculate grade growth ratio for a kid
-function calculateGradeGrowthRatio(kid) {
-  let totalScore = 0;
-  let totalMax = 0;
+// Calculate grade improvement bonus for a kid
+function calculateGradeBonus(kid) {
+  let totalBonus = 0;
   
   // Calculate for each subject
   for (const [subject, data] of Object.entries(kid.subjects)) {
     const baseRank = gradeRank[data.baseline] || 0;
     const currentRank = gradeRank[data.current] || 0;
-    const diff = currentRank - baseRank;
+    const improvement = currentRank - baseRank;
     
-    // Subject score = Math.max(0, baseRank * 5 + diff * 10)
-    const subjectScore = Math.max(0, baseRank * 5 + diff * 10);
-    // Subject max = 4*5 + 4*10 = 60
-    const subjectMax = 4 * 5 + 4 * 10; // 60
-    
-    totalScore += subjectScore;
-    totalMax += subjectMax;
+    // Only positive changes count: $2.50 per improved subject
+    if (improvement > 0) {
+      totalBonus += state.config.gradeBonusPerSubject; // $2.50 per improved subject
+    }
+    // No penalty for same or lower grades
   }
   
-  // Avoid division by zero
-  if (totalMax === 0) return 0;
-  
-  return totalScore / totalMax;
+  return totalBonus;
 }
 
-// Payout calculation with new formula - per kid
-function calculatePayout() {
-  const approved = state.chores.filter(c => c.status === 'approved').length;
-  const rejected = state.chores.filter(c => c.status === 'rejected').length;
-  const pending = state.chores.filter(c => c.status === 'pending').length;
+// Helper function to calculate points for a chore (handles frequency)
+function calculateChorePoints(chore) {
+  if (!chore.instances || chore.instances.total === 0) {
+    return chore.points || 0;
+  }
   
+  // For frequency chores: points are divided among instances
+  const pointsPerInstance = chore.points / chore.instances.total;
+  
+  if (chore.status === 'approved') {
+    // For approved: count completed instances
+    return pointsPerInstance * chore.instances.completed;
+  } else if (chore.status === 'rejected') {
+    // For rejected: count rejected instances (total - completed)
+    const rejectedInstances = chore.instances.total - chore.instances.completed;
+    return pointsPerInstance * rejectedInstances;
+  }
+  
+  return 0;
+}
+
+// Payout calculation with new system
+function calculatePayout() {
   // Calculate per-kid payouts
   const kidPayouts = state.kids.map(kid => {
-    // Calculate approved points for this kid
-    const kidApprovedPts = state.chores.filter(c => 
-      c.status === 'approved' && c.kid === kid.id
-    ).length;
+    // Start with base $20
+    let payout = state.config.base;
     
-    // Calculate rejected chores for this kid (for penalty)
-    const kidRejectedCount = state.chores.filter(c => 
-      c.status === 'rejected' && c.kid === kid.id
-    ).length;
+    // Calculate approved points for this kid (from chores)
+    let kidApprovedPoints = 0;
+    let kidRejectedPoints = 0;
+    let kidExtraBonus = 0;
     
-    // Calculate approved ratio for this kid (capped at 1)
-    const kidApprovedRatio = Math.min(kidApprovedPts / state.config.weekGoal, 1);
+    state.chores.forEach(chore => {
+      if (chore.kid === kid.id || chore.kid === 'shared') {
+        if (chore.status === 'approved') {
+          kidApprovedPoints += calculateChorePoints(chore);
+          
+          // Add extra credit bonus if enabled
+          if (chore.extra && chore.extra.enabled) {
+            kidExtraBonus += chore.extra.points * state.config.pointValue;
+          }
+        } else if (chore.status === 'rejected') {
+          kidRejectedPoints += calculateChorePoints(chore);
+        }
+      }
+    });
     
-    // Calculate grade growth ratio for this kid
-    const kidGradeGrowthRatio = calculateGradeGrowthRatio(kid);
+    // Calculate approved ratio (capped at 1)
+    const approvedRatio = Math.min(kidApprovedPoints / state.config.weekGoal, 1);
     
-    // Calculate base payout for this kid: base + (approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * (maxPay - base)
-    const baseKidPayout = state.config.base + 
-                         (kidApprovedRatio * 0.55 + kidGradeGrowthRatio * 0.45) * 
-                         (state.config.maxPay - state.config.base);
+    // Calculate grade bonus
+    const gradeBonus = calculateGradeBonus(kid);
     
-    // Apply penalty for rejected chores: $0.50 per rejected chore
-    const penaltyAmount = kidRejectedCount * 0.50;
-    const kidPayoutAfterPenalty = baseKidPayout - penaltyAmount;
+    // Calculate potential bonus from chores and grades
+    // Max bonus potential = $10 ($30 ceiling - $20 base)
+    const maxBonus = state.config.maxPay - state.config.base;
     
-    // Minimum floor is base $20
-    const finalKidPayout = Math.max(state.config.base, kidPayoutAfterPenalty);
+    // Chore bonus based on approved ratio
+    const choreBonus = approvedRatio * maxBonus;
+    
+    // Add bonuses
+    payout += choreBonus + gradeBonus + kidExtraBonus;
+    
+    // Apply penalty for rejected points
+    const penalty = kidRejectedPoints * state.config.pointValue;
+    payout -= penalty;
+    
+    // Apply floor of $0
+    payout = Math.max(0, payout);
+    
+    // Apply ceiling of $30
+    payout = Math.min(state.config.maxPay, payout);
     
     return {
       id: kid.id,
       name: kid.name,
       emoji: kid.emoji,
-      approvedPts: kidApprovedPts,
-      rejectedCount: kidRejectedCount,
-      approvedRatio: kidApprovedRatio,
-      gradeGrowthRatio: kidGradeGrowthRatio,
-      basePayout: baseKidPayout,
-      penaltyAmount: penaltyAmount,
-      payout: Math.max(0, finalKidPayout)
+      approvedPoints: kidApprovedPoints,
+      rejectedPoints: kidRejectedPoints,
+      approvedRatio: approvedRatio,
+      gradeBonus: gradeBonus,
+      extraBonus: kidExtraBonus,
+      penalty: penalty,
+      payout: payout
     };
   });
   
-  // Calculate total approved ratio (for overall display)
-  const approvedRatio = Math.min(approved / state.config.weekGoal, 1);
-  
-  // Calculate average grade growth ratio across all kids
-  let totalGrowthRatio = 0;
-  state.kids.forEach(kid => {
-    totalGrowthRatio += calculateGradeGrowthRatio(kid);
-  });
-  const avgGrowthRatio = state.kids.length > 0 ? totalGrowthRatio / state.kids.length : 0;
-  
-  // Calculate total payout (sum of all kid payouts) - FAMILY TOTAL
-  const total = kidPayouts.reduce((sum, kid) => sum + kid.payout, 0);
+  // Calculate totals for display
+  const totalApproved = kidPayouts.reduce((sum, kid) => sum + kid.approvedPoints, 0);
+  const totalRejected = kidPayouts.reduce((sum, kid) => sum + kid.rejectedPoints, 0);
+  const totalPayout = kidPayouts.reduce((sum, kid) => sum + kid.payout, 0);
+  const approvedRatio = Math.min(totalApproved / state.config.weekGoal, 1);
   
   return {
-    total: Math.max(0, total),
-    approved,
-    rejected,
-    pending,
-    approvedRatio,
-    avgGrowthRatio,
+    total: totalPayout,
+    approved: totalApproved,
+    rejected: totalRejected,
+    pending: state.chores.filter(c => c.status === 'pending').length,
+    approvedRatio: approvedRatio,
     base: state.config.base,
-    rate: state.config.rate,
-    penalty: state.config.penalty,
+    pointValue: state.config.pointValue,
     maxPay: state.config.maxPay,
     weekGoal: state.config.weekGoal,
-    kidPayouts // Add per-kid payouts to the return object
+    gradeBonusPerSubject: state.config.gradeBonusPerSubject,
+    kidPayouts
   };
 }
 
@@ -537,10 +615,12 @@ function render() {
   document.getElementById('rejectedCount').textContent = payout.rejected;
   
   document.getElementById('payoutBreakdown').innerHTML = `
+    <div class="small">Base: ${formatMoney(state.config.base)}</div>
     <div class="small">Max payout: ${formatMoney(payout.maxPay)}</div>
-    <div class="small">Approved ratio: ${(payout.approvedRatio * 100).toFixed(1)}% (${payout.approved}/${payout.weekGoal})</div>
-    <div class="small">Grade growth: ${(payout.avgGrowthRatio * 100).toFixed(1)}%</div>
-    <div class="small">Formula: (${(payout.approvedRatio * 100).toFixed(1)}% × 0.55 + ${(payout.avgGrowthRatio * 100).toFixed(1)}% × 0.45) × ${formatMoney(payout.maxPay)}</div>
+    <div class="small">Point value: ${formatMoney(state.config.pointValue)} per point</div>
+    <div class="small">Weekly goal: ${payout.weekGoal} points</div>
+    <div class="small">Approved points: ${payout.approved}/${payout.weekGoal} (${(payout.approvedRatio * 100).toFixed(1)}%)</div>
+    <div class="small">Grade bonus: ${formatMoney(state.config.gradeBonusPerSubject)} per improved subject</div>
   `;
   
   // Update individual kid payout cards
@@ -552,11 +632,12 @@ function render() {
     const kidPayout = payout.kidPayouts?.find(p => p.id === kidId);
     
     // Calculate values if kidPayout doesn't exist
-    const approvedPts = kidPayout?.approvedPts || state.chores.filter(c => c.status === 'approved' && c.kid === kidId).length;
-    const approvedRatio = kidPayout?.approvedRatio || Math.min(approvedPts / state.config.weekGoal, 1);
-    const gradeGrowthRatio = kidPayout?.gradeGrowthRatio || calculateGradeGrowthRatio(kid);
-    const payoutValue = kidPayout?.payout || 
-      (state.config.base + (approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * (state.config.maxPay - state.config.base));
+    const approvedPoints = kidPayout?.approvedPoints || 0;
+    const approvedRatio = kidPayout?.approvedRatio || Math.min(approvedPoints / state.config.weekGoal, 1);
+    const gradeBonus = kidPayout?.gradeBonus || calculateGradeBonus(kid);
+    const extraBonus = kidPayout?.extraBonus || 0;
+    const penalty = kidPayout?.penalty || 0;
+    const payoutValue = kidPayout?.payout || state.config.base;
     
     // Update kid name
     document.getElementById(`${kidId}Name`).textContent = kid.name;
@@ -573,21 +654,18 @@ function render() {
     
     // Update points and pending count
     const pendingCount = state.chores.filter(c => c.status === 'pending' && c.kid === kidId).length;
-    document.getElementById(`${kidId}ApprovedPts`).textContent = approvedPts;
+    document.getElementById(`${kidId}ApprovedPts`).textContent = approvedPoints;
     document.getElementById(`${kidId}WeekGoal`).textContent = state.config.weekGoal;
     document.getElementById(`${kidId}PendingCount`).textContent = `${pendingCount} pending`;
-    
-    // Update ratios
-    document.getElementById(`${kidId}ChoreRatio`).textContent = `${(approvedRatio * 100).toFixed(1)}% chores`;
-    document.getElementById(`${kidId}GradeRatio`).textContent = `${(gradeGrowthRatio * 100).toFixed(1)}% growth`;
     
     // Update breakdown
     document.getElementById(`${kidId}Breakdown`).innerHTML = `
       <div class="small">Base: ${formatMoney(state.config.base)}</div>
-      <div class="small">Chore ratio: ${(approvedRatio * 100).toFixed(1)}% × 0.55 = ${(approvedRatio * 0.55 * 100).toFixed(1)}%</div>
-      <div class="small">Growth ratio: ${(gradeGrowthRatio * 100).toFixed(1)}% × 0.45 = ${(gradeGrowthRatio * 0.45 * 100).toFixed(1)}%</div>
-      <div class="small">Total ratio: ${(approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * 100}%</div>
-      <div class="small">Multiplier: ${formatMoney(state.config.maxPay - state.config.base)}</div>
+      <div class="small">Approved points: ${approvedPoints}/${state.config.weekGoal} (${(approvedRatio * 100).toFixed(1)}%)</div>
+      <div class="small">Grade bonus: ${formatMoney(gradeBonus)} (${gradeBonus > 0 ? 'improved subjects' : 'no improvement'})</div>
+      <div class="small">Extra credit: ${formatMoney(extraBonus)}</div>
+      <div class="small">Penalties: -${formatMoney(penalty)}</div>
+      <div class="small">Total: ${formatMoney(payoutValue)}</div>
     `;
   });
   
@@ -617,17 +695,21 @@ function render() {
   // Update grades summary (simplified since payout is now in kid cards)
   const gradeSummary = document.getElementById('gradeSummary');
   gradeSummary.innerHTML = state.kids.map(k => {
-    const growthRatio = calculateGradeGrowthRatio(k);
+    const gradeBonus = calculateGradeBonus(k);
     
     return `
     <div class="row kid${k.id.slice(-1)}" style="margin:6px 0;padding:8px;background:rgba(0,0,0,0.1);border-radius:8px">
       <div style="flex:1">
         <b>${k.emoji || ''} ${k.name}</b>
-        <div class="small muted">Growth: ${(growthRatio * 100).toFixed(1)}%</div>
+        <div class="small muted">Grade bonus: ${formatMoney(gradeBonus)}</div>
         <div class="small muted" style="font-size:10px;margin-top:2px">
-          ${Object.entries(k.subjects).map(([subject, data]) => 
-            `${subject}: ${data.current} (baseline: ${data.baseline})`
-          ).join(' • ')}
+          ${Object.entries(k.subjects).map(([subject, data]) => {
+            const baseRank = gradeRank[data.baseline] || 0;
+            const currentRank = gradeRank[data.current] || 0;
+            const improvement = currentRank - baseRank;
+            const bonus = improvement > 0 ? `(+$${state.config.gradeBonusPerSubject})` : '';
+            return `${subject}: ${data.current} (baseline: ${data.baseline}) ${bonus}`;
+          }).join(' • ')}
         </div>
       </div>
       <span class="pill grade-${k.grade.toLowerCase()}">${k.grade}</span>
@@ -682,10 +764,12 @@ function renderChores() {
           ${chore.pinned ? '📌' : '📍'}
         </button>
         <div style="flex:1">
-          <div><b>${chore.name}</b> <span class="small muted">(${chore.points} pts • ${kid.emoji || ''} ${kid.name})</span></div>
+          <div><b>${chore.name}</b> <span class="small muted">(${chore.points} pts • ${chore.frequency} • ${kid.emoji || ''} ${kid.name})</span></div>
           <div class="small stat-${chore.status}">
             ${chore.status} ${timeAgo ? `• ${timeAgo}` : ''}
             ${chore.autoApproved ? '• ⚡ Auto' : ''}
+            ${chore.instances && chore.instances.total > 1 ? `• ${chore.instances.completed}/${chore.instances.total} instances` : ''}
+            ${chore.extra && chore.extra.enabled ? `• +${chore.extra.points} extra points` : ''}
           </div>
         </div>
         ${chore.status === 'pending' ? `
@@ -906,7 +990,8 @@ function setupEventListeners() {
   // Add chore
   document.getElementById('addChore').addEventListener('click', () => {
     const name = document.getElementById('choreName').value.trim();
-    const points = Number(document.getElementById('chorePts').value) || 5;
+    const points = Number(document.getElementById('chorePts').value) || 10;
+    const frequency = document.getElementById('choreFrequency').value;
     const kid = document.getElementById('choreKid').value;
     
     if (!name) {
@@ -914,22 +999,46 @@ function setupEventListeners() {
       return;
     }
     
+    // Determine instances based on frequency
+    let totalInstances = 1;
+    switch (frequency) {
+      case 'daily':
+        totalInstances = 7;
+        break;
+      case 'twice-weekly':
+        totalInstances = 2;
+        break;
+      case 'weekly':
+      default:
+        totalInstances = 1;
+        break;
+    }
+    
     const chore = {
       id: uid(),
       name,
       points,
+      frequency,
       kid,
       status: 'pending',
       pinned: false,
       createdAt: now(),
       completedAt: null,
       autoApproved: false,
-      recurring: document.getElementById('choreRecurring')?.checked || false
+      recurring: false,
+      instances: {
+        total: totalInstances,
+        completed: 0
+      },
+      extra: {
+        enabled: false,
+        points: 0
+      }
     };
     
     state.chores.unshift(chore);
     document.getElementById('choreName').value = '';
-    addLog(`Added chore: "${name}" for ${kid === 'shared' ? 'shared' : state.kids.find(k => k.id === kid)?.name}`);
+    addLog(`Added chore: "${name}" (${frequency}, ${points} points) for ${kid === 'shared' ? 'shared' : state.kids.find(k => k.id === kid)?.name}`);
     render();
   });
   
@@ -1317,13 +1426,50 @@ function executePinAction() {
   if (!chore) return;
   
   const oldStatus = chore.status;
-  chore.status = action === 'approve' ? 'approved' : 'rejected';
   
   if (action === 'approve') {
+    // For approve: mark as approved and ask about extra credit
+    chore.status = 'approved';
+    
+    // For frequency chores: mark all instances as completed
+    if (chore.instances && chore.instances.total > 1) {
+      chore.instances.completed = chore.instances.total;
+    }
+    
+    // Ask about extra credit
+    const extraPoints = prompt(`Approve "${chore.name}". Add extra credit points? (Enter 0 for none):`, "0");
+    if (extraPoints !== null) {
+      const points = parseInt(extraPoints) || 0;
+      if (points > 0) {
+        chore.extra = {
+          enabled: true,
+          points: points
+        };
+        addLog(`Parent approved "${chore.name}" with +${points} extra points`);
+      } else {
+        chore.extra = { enabled: false, points: 0 };
+        addLog(`Parent approved "${chore.name}"`);
+      }
+    } else {
+      // User cancelled, don't approve
+      chore.status = oldStatus;
+      pendingPinAction = null;
+      return;
+    }
+    
     confetti();
+  } else {
+    // For reject: mark as rejected
+    chore.status = 'rejected';
+    
+    // For frequency chores: mark all instances as rejected
+    if (chore.instances && chore.instances.total > 1) {
+      chore.instances.completed = 0;
+    }
+    
+    addLog(`Parent rejected "${chore.name}"`);
   }
   
-  addLog(`Parent ${action}ed "${chore.name}" (was ${oldStatus})`);
   pendingPinAction = null;
   render();
 }

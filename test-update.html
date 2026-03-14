@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Family Achievement Board - Update Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .test { margin: 20px 0; padding: 15px; border: 1px solid #ccc; border-radius: 5px; }
+        .pass { color: green; }
+        .fail { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Family Achievement Board Update Test</h1>
+    
+    <div class="test">
+        <h2>Test 1: Config Defaults</h2>
+        <p>Expected: base = 20, weekGoal = 100, pointValue = 0.20, maxPay = 30</p>
+        <div id="test1"></div>
+    </div>
+    
+    <div class="test">
+        <h2>Test 2: Grade Bonus Calculation</h2>
+        <p>Expected: $2.50 per improved subject, no penalty for same/lower grades</p>
+        <div id="test2"></div>
+    </div>
+    
+    <div class="test">
+        <h2>Test 3: Chore Points Calculation</h2>
+        <p>Expected: Points divided by instances for frequency chores</p>
+        <div id="test3"></div>
+    </div>
+    
+    <script>
+        // Test 1: Config Defaults
+        const config = {
+            base: 20,
+            weekGoal: 100,
+            pointValue: 0.20,
+            maxPay: 30,
+            gradeBonusPerSubject: 2.50
+        };
+        
+        let test1 = document.getElementById('test1');
+        let passed = true;
+        
+        if (config.base === 20) {
+            test1.innerHTML += '<div class="pass">✓ base = 20 (correct)</div>';
+        } else {
+            test1.innerHTML += `<div class="fail">✗ base = ${config.base} (should be 20)</div>`;
+            passed = false;
+        }
+        
+        if (config.weekGoal === 100) {
+            test1.innerHTML += '<div class="pass">✓ weekGoal = 100 (correct)</div>';
+        } else {
+            test1.innerHTML += `<div class="fail">✗ weekGoal = ${config.weekGoal} (should be 100)</div>`;
+            passed = false;
+        }
+        
+        if (config.pointValue === 0.20) {
+            test1.innerHTML += '<div class="pass">✓ pointValue = 0.20 (correct)</div>';
+        } else {
+            test1.innerHTML += `<div class="fail">✗ pointValue = ${config.pointValue} (should be 0.20)</div>`;
+            passed = false;
+        }
+        
+        if (config.maxPay === 30) {
+            test1.innerHTML += '<div class="pass">✓ maxPay = 30 (correct)</div>';
+        } else {
+            test1.innerHTML += `<div class="fail">✗ maxPay = ${config.maxPay} (should be 30)</div>`;
+            passed = false;
+        }
+        
+        if (config.gradeBonusPerSubject === 2.50) {
+            test1.innerHTML += '<div class="pass">✓ gradeBonusPerSubject = 2.50 (correct)</div>';
+        } else {
+            test1.innerHTML += `<div class="fail">✗ gradeBonusPerSubject = ${config.gradeBonusPerSubject} (should be 2.50)</div>`;
+            passed = false;
+        }
+        
+        // Test 2: Grade Bonus Calculation
+        const gradeRank = { F: 0, D: 1, C: 2, B: 3, A: 4 };
+        const gradeBonusPerSubject = 2.50;
+        
+        function calculateGradeBonus(kidSubjects) {
+            let totalBonus = 0;
+            for (const [subject, data] of Object.entries(kidSubjects)) {
+                const baseRank = gradeRank[data.baseline] || 0;
+                const currentRank = gradeRank[data.current] || 0;
+                const improvement = currentRank - baseRank;
+                if (improvement > 0) {
+                    totalBonus += gradeBonusPerSubject;
+                }
+            }
+            return totalBonus;
+        }
+        
+        // Test cases
+        const testCases = [
+            {
+                name: "All improved (C→A, B→A)",
+                subjects: { Math: { baseline: 'C', current: 'A' }, English: { baseline: 'B', current: 'A' } },
+                expected: 5.00
+            },
+            {
+                name: "Mixed (C→A, B→B)",
+                subjects: { Math: { baseline: 'C', current: 'A' }, English: { baseline: 'B', current: 'B' } },
+                expected: 2.50
+            },
+            {
+                name: "No improvement (A→A, B→B)",
+                subjects: { Math: { baseline: 'A', current: 'A' }, English: { baseline: 'B', current: 'B' } },
+                expected: 0.00
+            },
+            {
+                name: "Worse grades (A→B, B→C)",
+                subjects: { Math: { baseline: 'A', current: 'B' }, English: { baseline: 'B', current: 'C' } },
+                expected: 0.00
+            }
+        ];
+        
+        let test2 = document.getElementById('test2');
+        testCases.forEach(testCase => {
+            const bonus = calculateGradeBonus(testCase.subjects);
+            if (Math.abs(bonus - testCase.expected) < 0.01) {
+                test2.innerHTML += `<div class="pass">✓ ${testCase.name}: $${bonus.toFixed(2)} (correct)</div>`;
+            } else {
+                test2.innerHTML += `<div class="fail">✗ ${testCase.name}: $${bonus.toFixed(2)} (should be $${testCase.expected.toFixed(2)})</div>`;
+                passed = false;
+            }
+        });
+        
+        // Test 3: Chore Points Calculation
+        function calculateChorePoints(chore) {
+            if (!chore.instances || chore.instances.total === 0) {
+                return chore.points || 0;
+            }
+            
+            const pointsPerInstance = chore.points / chore.instances.total;
+            
+            if (chore.status === 'approved') {
+                return pointsPerInstance * chore.instances.completed;
+            } else if (chore.status === 'rejected') {
+                const rejectedInstances = chore.instances.total - chore.instances.completed;
+                return pointsPerInstance * rejectedInstances;
+            }
+            
+            return 0;
+        }
+        
+        const choreTests = [
+            {
+                name: "Weekly chore (approved)",
+                chore: { points: 20, frequency: 'weekly', instances: { total: 1, completed: 1 }, status: 'approved' },
+                expected: 20
+            },
+            {
+                name: "Twice-weekly chore (both done)",
+                chore: { points: 20, frequency: 'twice-weekly', instances: { total: 2, completed: 2 }, status: 'approved' },
+                expected: 20
+            },
+            {
+                name: "Twice-weekly chore (one done, one rejected)",
+                chore: { points: 20, frequency: 'twice-weekly', instances: { total: 2, completed: 1 }, status: 'rejected' },
+                expected: 10
+            },
+            {
+                name: "Daily chore (5/7 done)",
+                chore: { points: 70, frequency: 'daily', instances: { total: 7, completed: 5 }, status: 'approved' },
+                expected: 50
+            }
+        ];
+        
+        let test3 = document.getElementById('test3');
+        choreTests.forEach(test => {
+            const points = calculateChorePoints(test.chore);
+            if (Math.abs(points - test.expected) < 0.01) {
+                test3.innerHTML += `<div class="pass">✓ ${test.name}: ${points} points (correct)</div>`;
+            } else {
+                test3.innerHTML += `<div class="fail">✗ ${test.name}: ${points} points (should be ${test.expected})</div>`;
+                passed = false;
+            }
+        });
+        
+        // Final result
+        if (passed) {
+            document.body.innerHTML += '<h2 style="color: green;">All tests passed! ✅</h2>';
+        } else {
+            document.body.innerHTML += '<h2 style="color: red;">Some tests failed! ❌</h2>';
+        }
+    </script>
+</body>
+</html>

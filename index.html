@@ -41,11 +41,12 @@
       <article class="card kid-payout kid1-payout">
         <h2 style="color: #ff4757">👧 <span id="kid1Name">Kid 1</span>'s Payout</h2>
         <div class="money kid-money" id="kid1PayoutVal" style="color: #ff4757">$0.00</div>
-        <div class="small muted">Formula: base + (choreRatio × 0.55 + gradeGrowthRatio × 0.45) × (maxPay - base)</div>
+        <div class="small muted">Formula: $20 base + chore bonus + grade bonus + extra credit - penalties</div>
         
         <!-- Progress Bar -->
         <div class="progress-container">
           <div class="progress-labels">
+            <span class="small">$0</span>
             <span class="small">$20</span>
             <span class="small">$30</span>
           </div>
@@ -72,11 +73,12 @@
       <article class="card kid-payout kid2-payout">
         <h2 style="color: #00d2d3">👩 <span id="kid2Name">Kid 2</span>'s Payout</h2>
         <div class="money kid-money" id="kid2PayoutVal" style="color: #00d2d3">$0.00</div>
-        <div class="small muted">Formula: base + (choreRatio × 0.55 + gradeGrowthRatio × 0.45) × (maxPay - base)</div>
+        <div class="small muted">Formula: $20 base + chore bonus + grade bonus + extra credit - penalties</div>
         
         <!-- Progress Bar -->
         <div class="progress-container">
           <div class="progress-labels">
+            <span class="small">$0</span>
             <span class="small">$20</span>
             <span class="small">$30</span>
           </div>
@@ -104,7 +106,12 @@
         <h2>Chores</h2>
         <div class="row interactive">
           <input id="choreName" placeholder="Add chore (e.g., Clean room)" />
-          <input id="chorePts" type="number" min="1" max="50" value="5" style="width:90px" placeholder="Points" />
+          <input id="chorePts" type="number" min="1" max="100" value="10" style="width:90px" placeholder="Points" />
+          <select id="choreFrequency" style="width:120px">
+            <option value="weekly">Weekly</option>
+            <option value="twice-weekly">Twice weekly</option>
+            <option value="daily">Daily</option>
+          </select>
           <select id="choreKid">
             <option value="kid1">Kid 1</option>
             <option value="kid2">Kid 2</option>
