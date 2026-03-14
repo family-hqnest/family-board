@@ -14,11 +14,11 @@ const stateDefault = () => ({
   version: 4, // Increment version for new payout formula with rejected chore penalties
   weekStart: getWeekStart(),
   config: {
-    base: 20,
+    base: 0, // Starting payout (changed from 20 to 0)
     rate: 2.5,
     penalty: 1,
-    maxPay: 30, // Maximum payout amount (changed from 20 to 30)
-    weekGoal: 50, // Weekly goal for approved points
+    maxPay: 30, // Maximum payout amount
+    weekGoal: 50, // Weekly goal for approved points (point value, not chore count)
     parentPin: PARENT_PIN,
     autoApproveHours: AUTO_APPROVE_HOURS
   },
@@ -190,9 +190,9 @@ function load() {
     if (saved.version === 3) {
       console.log('Migrating from v3 to v4');
       
-      // Update config: base should be 20, maxPay should be 30
+      // Update config: base should be 0, maxPay should be 30
       if (saved.config) {
-        saved.config.base = 20;
+        saved.config.base = 0;
         saved.config.maxPay = 30;
       }
       
@@ -564,8 +564,8 @@ function render() {
     // Update payout value
     document.getElementById(`${kidId}PayoutVal`).textContent = formatMoney(payoutValue);
     
-    // Update progress bar (from $20 to $30)
-    const progressPercentage = ((payoutValue - 20) / 10) * 100;
+    // Update progress bar (from $0 to $30)
+    const progressPercentage = (payoutValue / 30) * 100;
     const progressElement = document.getElementById(`${kidId}Progress`);
     if (progressElement) {
       progressElement.style.width = `${Math.max(0, Math.min(100, progressPercentage))}%`;
