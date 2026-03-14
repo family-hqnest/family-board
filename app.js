@@ -1,5 +1,5 @@
 // Family Achievement Board - Complete JavaScript
-const STORAGE_KEY = 'famboard-v2';
+const STORAGE_KEY = 'famboard-v3';
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const PARENT_PIN = null; // Default PIN - should be configurable, null means not set
 const AUTO_APPROVE_HOURS = 48;
@@ -11,14 +11,14 @@ const formatDate = (ts) => new Date(ts).toLocaleDateString('en-US', { weekday: '
 
 // SYNC POINT: Default state structure
 const stateDefault = () => ({
-  version: 2, // Increment version for new payout formula
+  version: 3, // Increment version for new payout formula and grade calculator
   weekStart: getWeekStart(),
   config: {
     base: 20,
     rate: 2.5,
     penalty: 1,
-    maxPay: 100, // Maximum payout amount
-    weekGoal: 10, // Weekly goal for approved points
+    maxPay: 20, // Maximum payout amount (changed from 100 to 20)
+    weekGoal: 50, // Weekly goal for approved points (changed from 10 to 50)
     parentPin: PARENT_PIN,
     autoApproveHours: AUTO_APPROVE_HOURS
   },
@@ -30,10 +30,16 @@ const stateDefault = () => ({
       grade: 'B',
       baselineGrade: 'B', // Store baseline for growth comparison
       subjects: {
-        math: { current: 'B', baseline: 'B' },
-        reading: { current: 'B', baseline: 'B' },
-        science: { current: 'B', baseline: 'B' },
-        social: { current: 'B', baseline: 'B' }
+        Math: { current: 'B', baseline: 'B' },
+        English: { current: 'B', baseline: 'B' },
+        Science: { current: 'B', baseline: 'B' },
+        History: { current: 'B', baseline: 'B' }
+      },
+      gradeCalc: {
+        Math: { tests: [], quizzes: [], homework: [] },
+        English: { tests: [], quizzes: [], homework: [] },
+        Science: { tests: [], quizzes: [], homework: [] },
+        History: { tests: [], quizzes: [], homework: [] }
       },
       gradeHistory: []
     },
@@ -44,10 +50,16 @@ const stateDefault = () => ({
       grade: 'B',
       baselineGrade: 'B', // Store baseline for growth comparison
       subjects: {
-        math: { current: 'B', baseline: 'B' },
-        reading: { current: 'B', baseline: 'B' },
-        science: { current: 'B', baseline: 'B' },
-        social: { current: 'B', baseline: 'B' }
+        Math: { current: 'B', baseline: 'B' },
+        English: { current: 'B', baseline: 'B' },
+        Science: { current: 'B', baseline: 'B' },
+        History: { current: 'B', baseline: 'B' }
+      },
+      gradeCalc: {
+        Math: { tests: [], quizzes: [], homework: [] },
+        English: { tests: [], quizzes: [], homework: [] },
+        Science: { tests: [], quizzes: [], homework: [] },
+        History: { tests: [], quizzes: [], homework: [] }
       },
       gradeHistory: []
     }
@@ -95,10 +107,10 @@ function load() {
           // Add subjects structure
           if (!kid.subjects) {
             kid.subjects = {
-              math: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
-              reading: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
-              science: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
-              social: { current: kid.grade || 'B', baseline: kid.grade || 'B' }
+              Math: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              English: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              Science: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              History: { current: kid.grade || 'B', baseline: kid.grade || 'B' }
             };
           }
           
@@ -106,11 +118,72 @@ function load() {
           if (kid.calc) {
             delete kid.calc;
           }
+          
+          // Add gradeCalc structure if it doesn't exist
+          if (!kid.gradeCalc) {
+            kid.gradeCalc = {
+              Math: { tests: [], quizzes: [], homework: [] },
+              English: { tests: [], quizzes: [], homework: [] },
+              Science: { tests: [], quizzes: [], homework: [] },
+              History: { tests: [], quizzes: [], homework: [] }
+            };
+          }
         });
       }
       
       // Update version
       saved.version = 2;
+    }
+    
+    // Migration from v2 to v3
+    if (saved.version === 2) {
+      console.log('Migrating from v2 to v3');
+      
+      // Update config defaults
+      if (saved.config) {
+        saved.config.maxPay = 20; // Changed from 100 to 20
+        saved.config.weekGoal = 50; // Changed from 10 to 50
+        
+        // Update PIN fallback from '1234' to null
+        if (saved.config.parentPin === '1234') {
+          saved.config.parentPin = null;
+        }
+      }
+      
+      // Update subject names from lowercase to proper case
+      if (saved.kids && Array.isArray(saved.kids)) {
+        saved.kids.forEach(kid => {
+          if (kid.subjects) {
+            // Rename subjects
+            const newSubjects = {};
+            if (kid.subjects.math) {
+              newSubjects.Math = kid.subjects.math;
+            }
+            if (kid.subjects.reading) {
+              newSubjects.English = kid.subjects.reading;
+            }
+            if (kid.subjects.science) {
+              newSubjects.Science = kid.subjects.science;
+            }
+            if (kid.subjects.social) {
+              newSubjects.History = kid.subjects.social;
+            }
+            kid.subjects = newSubjects;
+          }
+          
+          // Add gradeCalc structure
+          if (!kid.gradeCalc) {
+            kid.gradeCalc = {
+              Math: { tests: [], quizzes: [], homework: [] },
+              English: { tests: [], quizzes: [], homework: [] },
+              Science: { tests: [], quizzes: [], homework: [] },
+              History: { tests: [], quizzes: [], homework: [] }
+            };
+          }
+        });
+      }
+      
+      saved.version = 3;
     }
     
     // Merge with defaults for any new properties
@@ -120,16 +193,26 @@ function load() {
     merged.kids.forEach(kid => {
       if (!kid.subjects) {
         kid.subjects = {
-          math: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
-          reading: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
-          science: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
-          social: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' }
+          Math: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          English: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          Science: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          History: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' }
         };
       }
       
       // Ensure baselineGrade exists
       if (!kid.baselineGrade) {
         kid.baselineGrade = kid.grade || 'B';
+      }
+      
+      // Ensure gradeCalc exists
+      if (!kid.gradeCalc) {
+        kid.gradeCalc = {
+          Math: { tests: [], quizzes: [], homework: [] },
+          English: { tests: [], quizzes: [], homework: [] },
+          Science: { tests: [], quizzes: [], homework: [] },
+          History: { tests: [], quizzes: [], homework: [] }
+        };
       }
     });
     
@@ -178,9 +261,9 @@ function showSetupModal() {
   if (!modal) return;
   
   // Set default values
-  document.getElementById('setupKid1Name').value = 'Sofi';
+  document.getElementById('setupKid1Name').value = 'Kid 1';
   document.getElementById('setupKid1Emoji').value = '👧';
-  document.getElementById('setupKid2Name').value = 'Juli';
+  document.getElementById('setupKid2Name').value = 'Kid 2';
   document.getElementById('setupKid2Emoji').value = '👩';
   document.getElementById('setupWeeklyPoints').value = 50;
   document.getElementById('setupMaxPayout').value = 50;
@@ -208,7 +291,7 @@ function handleSetupSubmit() {
   // Update config
   state.config.base = Math.min(maxPayout, 50); // Base payout
   state.config.rate = maxPayout / weeklyPoints; // Rate per point
-  state.config.parentPin = parentPin || '1234'; // Default PIN if empty
+  state.config.parentPin = parentPin || null; // Default PIN if empty (changed from '1234' to null)
   
   // Save and close
   save();
@@ -245,7 +328,17 @@ function weekGuard() {
     const oldWeek = formatDate(state.weekStart);
     state.weekStart = current;
     state.chores = state.chores.filter(c => c.recurring);
-    state.logs.unshift(`${new Date().toLocaleString()}: Auto-reset for new week (was ${oldWeek})`);
+    
+    // Auto-update baselines: set baseline = current for all subjects
+    state.kids.forEach(kid => {
+      Object.keys(kid.subjects).forEach(subject => {
+        kid.subjects[subject].baseline = kid.subjects[subject].current;
+      });
+      // Also update baseline grade
+      kid.baselineGrade = kid.grade;
+    });
+    
+    state.logs.unshift(`${new Date().toLocaleString()}: Auto-reset for new week (was ${oldWeek}) - baselines updated`);
     save();
   }
 }
@@ -299,13 +392,40 @@ function calculateGradeGrowthRatio(kid) {
   return totalScore / totalMax;
 }
 
-// Payout calculation with new formula
+// Payout calculation with new formula - per kid
 function calculatePayout() {
   const approved = state.chores.filter(c => c.status === 'approved').length;
   const rejected = state.chores.filter(c => c.status === 'rejected').length;
   const pending = state.chores.filter(c => c.status === 'pending').length;
   
-  // Calculate approved points ratio (capped at 1)
+  // Calculate per-kid payouts
+  const kidPayouts = state.kids.map(kid => {
+    // Calculate approved points for this kid
+    const kidApprovedPts = state.chores.filter(c => 
+      c.status === 'approved' && c.kid === kid.id
+    ).length;
+    
+    // Calculate approved ratio for this kid (capped at 1)
+    const kidApprovedRatio = Math.min(kidApprovedPts / state.config.weekGoal, 1);
+    
+    // Calculate grade growth ratio for this kid
+    const kidGradeGrowthRatio = calculateGradeGrowthRatio(kid);
+    
+    // Calculate payout for this kid: (approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * maxPay
+    const kidPayout = (kidApprovedRatio * 0.55 + kidGradeGrowthRatio * 0.45) * state.config.maxPay;
+    
+    return {
+      id: kid.id,
+      name: kid.name,
+      emoji: kid.emoji,
+      approvedPts: kidApprovedPts,
+      approvedRatio: kidApprovedRatio,
+      gradeGrowthRatio: kidGradeGrowthRatio,
+      payout: Math.max(0, kidPayout)
+    };
+  });
+  
+  // Calculate total approved ratio (for overall display)
   const approvedRatio = Math.min(approved / state.config.weekGoal, 1);
   
   // Calculate average grade growth ratio across all kids
@@ -315,8 +435,8 @@ function calculatePayout() {
   });
   const avgGrowthRatio = state.kids.length > 0 ? totalGrowthRatio / state.kids.length : 0;
   
-  // New payout formula: (approvedRatio * 0.55 + avgGrowthRatio * 0.45) * maxPay
-  const total = (approvedRatio * 0.55 + avgGrowthRatio * 0.45) * state.config.maxPay;
+  // Calculate total payout (sum of all kid payouts)
+  const total = kidPayouts.reduce((sum, kid) => sum + kid.payout, 0);
   
   return {
     total: Math.max(0, total),
@@ -329,7 +449,8 @@ function calculatePayout() {
     rate: state.config.rate,
     penalty: state.config.penalty,
     maxPay: state.config.maxPay,
-    weekGoal: state.config.weekGoal
+    weekGoal: state.config.weekGoal,
+    kidPayouts // Add per-kid payouts to the return object
   };
 }
 
@@ -415,15 +536,26 @@ function render() {
     choreKidSelect.appendChild(sharedOption);
   }
   
-  // Update grades
+  // Update grades with individual payouts
   const gradeSummary = document.getElementById('gradeSummary');
   gradeSummary.innerHTML = state.kids.map(k => {
     const growthRatio = calculateGradeGrowthRatio(k);
+    // Find this kid's payout from the payout object
+    const kidPayout = payout.kidPayouts?.find(p => p.id === k.id);
+    
     return `
     <div class="row kid${k.id.slice(-1)}" style="margin:6px 0;padding:8px;background:rgba(0,0,0,0.1);border-radius:8px">
       <div style="flex:1">
         <b>${k.emoji || ''} ${k.name}</b>
         <div class="small muted">Growth: ${(growthRatio * 100).toFixed(1)}%</div>
+        ${kidPayout ? `
+        <div class="small" style="color:#8fff8f;margin-top:4px">
+          Payout: ${formatMoney(kidPayout.payout)}
+          <span class="muted" style="font-size:10px">
+            (${kidPayout.approvedPts}/${state.config.weekGoal} pts • ${(kidPayout.approvedRatio * 100).toFixed(1)}% × 0.55 + ${(kidPayout.gradeGrowthRatio * 100).toFixed(1)}% × 0.45)
+          </span>
+        </div>
+        ` : ''}
         <div class="small muted" style="font-size:10px;margin-top:2px">
           ${Object.entries(k.subjects).map(([subject, data]) => 
             `${subject}: ${data.current} (baseline: ${data.baseline})`
@@ -512,42 +644,79 @@ function filterChores(chores, filter) {
   }
 }
 
-// Render calculator
+// Render calculator with new gradeCalc structure
 function renderCalculator() {
-  const kid1 = state.kids.find(k => k.id === 'kid1');
-  if (!kid1 || !kid1.calc) return;
+  const kidSelect = document.getElementById('calcKidSelect');
+  const subjectSelect = document.getElementById('calcSubjectSelect');
+  const targetGradeSelect = document.getElementById('targetGradeSelect');
+  const targetCategorySelect = document.getElementById('targetCategorySelect');
   
+  // Populate kid selector
+  if (kidSelect) {
+    kidSelect.innerHTML = state.kids.map(k => 
+      `<option value="${k.id}">${k.emoji || ''} ${k.name}</option>`
+    ).join('');
+  }
+  
+  // Get selected kid
+  const selectedKidId = kidSelect ? kidSelect.value : 'kid1';
+  const kid = state.kids.find(k => k.id === selectedKidId);
+  if (!kid || !kid.gradeCalc) return;
+  
+  // Populate subject selector
+  if (subjectSelect) {
+    subjectSelect.innerHTML = Object.keys(kid.gradeCalc).map(subject => 
+      `<option value="${subject}">${subject}</option>`
+    ).join('');
+  }
+  
+  // Get selected subject
+  const selectedSubject = subjectSelect ? subjectSelect.value : 'Math';
+  const subjectData = kid.gradeCalc[selectedSubject];
+  if (!subjectData) return;
+  
+  // Category weights
+  const weights = { tests: 40, quizzes: 30, homework: 30 };
+  
+  // Calculate averages and contributions
   const rows = document.getElementById('calcRows');
-  const categories = kid1.calc;
-  
-  rows.innerHTML = Object.entries(categories).map(([name, data]) => {
-    const avg = data.scores.length ? 
-      (data.scores.reduce((a, b) => a + b, 0) / data.scores.length).toFixed(1) : 
+  rows.innerHTML = Object.entries(subjectData).map(([category, scores]) => {
+    const avg = scores.length ? 
+      (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 
       0;
-    const contribution = (avg * data.weight / 100).toFixed(1);
+    const contribution = (avg * weights[category] / 100).toFixed(1);
     
     return `
       <div class="card" style="margin-bottom:12px">
         <div class="row" style="justify-content:space-between;margin-bottom:8px">
-          <b>${name}</b>
-          <span class="small muted">Weight: ${data.weight}%</span>
+          <b>${category.charAt(0).toUpperCase() + category.slice(1)}</b>
+          <span class="small muted">Weight: ${weights[category]}%</span>
         </div>
         <div class="small muted" style="margin-bottom:6px">
-          Scores: ${data.scores.join(', ')}
+          Scores: ${scores.length ? scores.join(', ') : 'None yet'}
         </div>
         <div class="row" style="justify-content:space-between">
           <span class="small">Average: ${avg}%</span>
           <span class="small">Contribution: ${contribution}%</span>
         </div>
+        <div class="row" style="margin-top:8px;gap:4px">
+          <input type="number" min="0" max="100" placeholder="Add score" 
+                 data-kid="${kid.id}" data-subject="${selectedSubject}" data-category="${category}"
+                 style="flex:1;padding:4px;font-size:12px">
+          <button class="small" data-action="add-score" 
+                  data-kid="${kid.id}" data-subject="${selectedSubject}" data-category="${category}">
+            Add
+          </button>
+        </div>
       </div>
     `;
   }).join('');
   
-  // Calculate weighted grade
+  // Calculate weighted grade for this subject
   let weighted = 0;
-  Object.values(categories).forEach(v => {
-    const avg = v.scores.length ? v.scores.reduce((a, b) => a + b, 0) / v.scores.length : 0;
-    weighted += avg * (v.weight / 100);
+  Object.entries(subjectData).forEach(([category, scores]) => {
+    const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+    weighted += avg * (weights[category] / 100);
   });
   
   document.getElementById('weightedOut').textContent = weighted.toFixed(1) + '%';
@@ -562,16 +731,74 @@ function renderCalculator() {
   document.getElementById('letterGrade').textContent = letterGrade;
   document.getElementById('letterGrade').className = `grade-${letterGrade.toLowerCase()}`;
   
-  // Update sparkline
-  updateSparkline(kid1.gradeHistory);
+  // Update sparkline with subject grade history
+  updateSparkline(kid.gradeHistory);
   
   // Add to grade history if not already there
   const currentGrade = Number(weighted.toFixed(1));
-  if (!kid1.gradeHistory.includes(currentGrade)) {
-    kid1.gradeHistory.push(currentGrade);
-    kid1.gradeHistory = kid1.gradeHistory.slice(-12); // Keep last 12
+  if (!kid.gradeHistory.includes(currentGrade)) {
+    kid.gradeHistory.push(currentGrade);
+    kid.gradeHistory = kid.gradeHistory.slice(-12); // Keep last 12
     save();
   }
+  
+  // Populate "What do I need?" dropdowns
+  if (targetGradeSelect) {
+    targetGradeSelect.innerHTML = `
+      <option value="90">A (90%)</option>
+      <option value="80">B (80%)</option>
+      <option value="70">C (70%)</option>
+      <option value="60">D (60%)</option>
+    `;
+  }
+  
+  if (targetCategorySelect) {
+    targetCategorySelect.innerHTML = `
+      <option value="tests">Tests</option>
+      <option value="quizzes">Quizzes</option>
+      <option value="homework">Homework</option>
+    `;
+  }
+  
+  // Calculate and display "What do I need?" result
+  calculateWhatDoINeed(kid, selectedSubject, subjectData, weights);
+}
+
+// Calculate "What do I need?" tool
+function calculateWhatDoINeed(kid, subject, subjectData, weights) {
+  const targetGradeSelect = document.getElementById('targetGradeSelect');
+  const targetCategorySelect = document.getElementById('targetCategorySelect');
+  const whatDoINeedResult = document.getElementById('whatDoINeedResult');
+  
+  if (!targetGradeSelect || !targetCategorySelect || !whatDoINeedResult) return;
+  
+  const targetGrade = parseFloat(targetGradeSelect.value);
+  const targetCategory = targetCategorySelect.value;
+  
+  // Calculate current weighted grade without the target category
+  let currentWeighted = 0;
+  Object.entries(subjectData).forEach(([category, scores]) => {
+    if (category !== targetCategory) {
+      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
+      currentWeighted += avg * (weights[category] / 100);
+    }
+  });
+  
+  // Calculate required score in target category to reach target grade
+  const weight = weights[targetCategory];
+  const requiredScore = ((targetGrade - currentWeighted) * 100) / weight;
+  
+  // Format result
+  let resultText = '';
+  if (requiredScore > 100) {
+    resultText = `Not reachable through ${targetCategory} alone. You'd need ${requiredScore.toFixed(1)}%, which is impossible.`;
+  } else if (requiredScore < 0) {
+    resultText = `You've already reached your target grade! Current weighted: ${(currentWeighted + (subjectData[targetCategory].length ? (subjectData[targetCategory].reduce((a, b) => a + b, 0) / subjectData[targetCategory].length * weight / 100) : 0)).toFixed(1)}%`;
+  } else {
+    resultText = `To get a ${targetGrade}% overall, you need ${requiredScore.toFixed(1)}% on your next ${targetCategory.slice(0, -1)}.`;
+  }
+  
+  whatDoINeedResult.textContent = resultText;
 }
 
 function updateSparkline(data) {
@@ -697,13 +924,23 @@ function setupEventListeners() {
   
   // New week
   document.getElementById('newWeekBtn').addEventListener('click', () => {
-    if (!confirm('Start a new week? Current chores will be cleared (except recurring).')) return;
+    if (!confirm('Start a new week? Current chores will be cleared (except recurring). Baselines will be updated to current grades.')) return;
     
     const oldWeek = formatDate(state.weekStart);
     state.weekStart = getWeekStart();
     // Keep only recurring chores
     state.chores = state.chores.filter(c => c.recurring);
-    addLog(`Manual new week reset (was ${oldWeek})`);
+    
+    // Auto-update baselines: set baseline = current for all subjects
+    state.kids.forEach(kid => {
+      Object.keys(kid.subjects).forEach(subject => {
+        kid.subjects[subject].baseline = kid.subjects[subject].current;
+      });
+      // Also update baseline grade
+      kid.baselineGrade = kid.grade;
+    });
+    
+    addLog(`Manual new week reset (was ${oldWeek}) - baselines updated`);
     render();
   });
   
@@ -720,13 +957,7 @@ function setupEventListeners() {
               `<option value="${g}" ${data.current === g ? 'selected' : ''}>${g}</option>`
             ).join('')}
           </select>
-          <span class="small muted" style="margin-left:4px;font-size:10px">current</span>
-          <select data-kid="${k.id}" data-subject="${subject}" data-type="baseline" style="width:80px;font-size:12px;margin-left:8px">
-            ${['A', 'B', 'C', 'D', 'F'].map(g => 
-              `<option value="${g}" ${data.baseline === g ? 'selected' : ''}>${g}</option>`
-            ).join('')}
-          </select>
-          <span class="small muted" style="margin-left:4px;font-size:10px">baseline</span>
+          <span class="small muted" style="margin-left:4px;font-size:10px">current grade</span>
         </div>
       `).join('');
       
@@ -793,22 +1024,54 @@ function setupEventListeners() {
     drawer.classList.remove('open');
   });
   
-  // Add score to calculator
-  document.getElementById('addScoreBtn').addEventListener('click', () => {
-    const score = Number(document.getElementById('newScore').value);
-    const category = document.getElementById('scoreCategory').value;
-    
-    if (isNaN(score) || score < 0 || score > 100) {
-      alert('Please enter a valid score (0-100)');
-      return;
+  // Add score to calculator (new structure)
+  document.addEventListener('click', (e) => {
+    if (e.target.matches('[data-action="add-score"]')) {
+      const input = e.target.previousElementSibling;
+      const score = Number(input.value);
+      const kidId = e.target.dataset.kid;
+      const subject = e.target.dataset.subject;
+      const category = e.target.dataset.category;
+      
+      if (isNaN(score) || score < 0 || score > 100) {
+        alert('Please enter a valid score (0-100)');
+        return;
+      }
+      
+      const kid = state.kids.find(k => k.id === kidId);
+      if (kid && kid.gradeCalc && kid.gradeCalc[subject] && kid.gradeCalc[subject][category]) {
+        kid.gradeCalc[subject][category].push(score);
+        input.value = '';
+        addLog(`Added ${score}% to ${subject} ${category} for ${kid.name}`);
+        renderCalculator();
+        save();
+      }
     }
+  });
+  
+  // Update calculator when kid or subject changes
+  document.getElementById('calcKidSelect')?.addEventListener('change', renderCalculator);
+  document.getElementById('calcSubjectSelect')?.addEventListener('change', renderCalculator);
+  document.getElementById('targetGradeSelect')?.addEventListener('change', () => {
+    const kidSelect = document.getElementById('calcKidSelect');
+    const subjectSelect = document.getElementById('calcSubjectSelect');
+    const kid = state.kids.find(k => k.id === kidSelect.value);
+    const subjectData = kid?.gradeCalc?.[subjectSelect.value];
+    const weights = { tests: 40, quizzes: 30, homework: 30 };
     
-    const kid1 = state.kids.find(k => k.id === 'kid1');
-    if (kid1 && kid1.calc && kid1.calc[category]) {
-      kid1.calc[category].scores.push(score);
-      document.getElementById('newScore').value = '';
-      addLog(`Added ${score}% to ${category} for Kid 1`);
-      renderCalculator();
+    if (kid && subjectData) {
+      calculateWhatDoINeed(kid, subjectSelect.value, subjectData, weights);
+    }
+  });
+  document.getElementById('targetCategorySelect')?.addEventListener('change', () => {
+    const kidSelect = document.getElementById('calcKidSelect');
+    const subjectSelect = document.getElementById('calcSubjectSelect');
+    const kid = state.kids.find(k => k.id === kidSelect.value);
+    const subjectData = kid?.gradeCalc?.[subjectSelect.value];
+    const weights = { tests: 40, quizzes: 30, homework: 30 };
+    
+    if (kid && subjectData) {
+      calculateWhatDoINeed(kid, subjectSelect.value, subjectData, weights);
     }
   });
   
@@ -883,10 +1146,10 @@ function setupEventListeners() {
     }
     
     // Update or remove PIN
-    state.config.parentPin = newPin || '1234'; // Default if empty
+    state.config.parentPin = newPin || null; // Default if empty (changed from '1234' to null)
     save();
     
-    pinStatus.textContent = newPin ? 'PIN updated successfully' : 'PIN removed (using default 1234)';
+    pinStatus.textContent = newPin ? 'PIN updated successfully' : 'PIN removed';
     pinStatus.style.color = 'var(--ok)';
     
     // Clear fields
@@ -907,10 +1170,21 @@ function setupEventListeners() {
     if (confirm('Clear logs older than 7 days?')) {
       const weekAgo = now() - (7 * 24 * 60 * 60 * 1000);
       state.logs = state.logs.filter(log => {
-        // Simple date parsing - in production use proper parsing
-        return log.includes('Auto') || Math.random() > 0.5; // Keep some logs
+        // Parse timestamp from log entry (format: "MM/DD/YYYY, HH:MM:SS AM/PM: message")
+        try {
+          const timestampMatch = log.match(/^(\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2}:\d{2} (?:AM|PM))/);
+          if (timestampMatch) {
+            const logDate = new Date(timestampMatch[1]);
+            return logDate.getTime() >= weekAgo;
+          }
+          // If we can't parse the timestamp, keep the log (safer)
+          return true;
+        } catch (e) {
+          // If parsing fails, keep the log
+          return true;
+        }
       });
-      addLog('Cleared old logs');
+      addLog('Cleared logs older than 7 days');
       render();
     }
   });
@@ -930,7 +1204,8 @@ function setupEventListeners() {
   // PIN gate
   document.getElementById('pinBtn').addEventListener('click', () => {
     const pin = document.getElementById('pinInput').value;
-    if (pin === state.config.parentPin) {
+    // If parentPin is null, allow any PIN (no PIN set)
+    if (state.config.parentPin === null || pin === state.config.parentPin) {
       document.querySelector('.controls').classList.remove('interactive');
       document.getElementById('pinInput').value = '';
       addLog('PIN verified - controls unlocked');
@@ -954,7 +1229,8 @@ function showPinModal() {
   
   document.getElementById('pinSubmit').onclick = () => {
     const pin = input.value;
-    if (pin === state.config.parentPin) {
+    // If parentPin is null, allow any PIN (no PIN set)
+    if (state.config.parentPin === null || pin === state.config.parentPin) {
       executePinAction();
       modal.close();
     } else {

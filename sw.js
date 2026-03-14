@@ -1,4 +1,4 @@
-const CACHE_NAME = 'famboard-cache-v2';
+const CACHE_NAME = 'famboard-cache-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -36,7 +36,7 @@ self.addEventListener('activate', (event) => {
           clients.forEach(client => {
             client.postMessage({
               type: 'CACHE_UPDATED',
-              version: 'v2'
+              version: 'v3'
             });
           });
         });

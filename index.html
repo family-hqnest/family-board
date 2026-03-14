@@ -153,10 +153,25 @@
   <!-- Calculator Drawer -->
   <aside class="drawer" id="calcDrawer">
     <div class="row" style="justify-content:space-between;align-items:center">
-      <h3>Kid1 Weighted Grade Calculator</h3>
+      <h3>Grade Calculator</h3>
       <button id="closeCalcBtn">×</button>
     </div>
+    
+    <div class="row" style="margin-bottom:16px;gap:8px">
+      <select id="calcKidSelect" style="flex:1">
+        <option value="kid1">Kid 1</option>
+        <option value="kid2">Kid 2</option>
+      </select>
+      <select id="calcSubjectSelect" style="flex:1">
+        <option value="Math">Math</option>
+        <option value="English">English</option>
+        <option value="Science">Science</option>
+        <option value="History">History</option>
+      </select>
+    </div>
+    
     <div id="calcRows"></div>
+    
     <div class="row" style="margin-top:16px;justify-content:space-between">
       <div>
         <div class="small muted">Current Weighted Grade:</div>
@@ -167,17 +182,28 @@
         <div style="font-size:1.5rem;font-weight:bold" id="letterGrade">-</div>
       </div>
     </div>
-    <div class="row" style="margin-top:12px">
-      <input id="newScore" type="number" min="0" max="100" placeholder="Add score" style="flex:1" />
-      <select id="scoreCategory">
-        <option value="Homework">Homework</option>
-        <option value="Quizzes">Quizzes</option>
-        <option value="Tests">Tests</option>
-        <option value="Participation">Participation</option>
-      </select>
-      <button id="addScoreBtn">Add</button>
+    
+    <div class="card" style="margin-top:16px;background:rgba(0,0,0,0.2)">
+      <h4 style="margin-bottom:12px">What do I need?</h4>
+      <div class="row" style="margin-bottom:12px;gap:8px">
+        <select id="targetGradeSelect" style="flex:1">
+          <option value="90">A (90%)</option>
+          <option value="80">B (80%)</option>
+          <option value="70">C (70%)</option>
+          <option value="60">D (60%)</option>
+        </select>
+        <select id="targetCategorySelect" style="flex:1">
+          <option value="tests">Tests</option>
+          <option value="quizzes">Quizzes</option>
+          <option value="homework">Homework</option>
+        </select>
+      </div>
+      <div id="whatDoINeedResult" class="small" style="color:var(--cyan);min-height:20px">
+        Select target grade and category
+      </div>
     </div>
-    <svg id="spark" class="spark" viewBox="0 0 340 110"></svg>
+    
+    <svg id="spark" class="spark" viewBox="0 0 340 110" style="margin-top:16px"></svg>
   </aside>
 
   <!-- PIN Gate Modal -->
