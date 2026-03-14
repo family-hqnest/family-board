@@ -17,8 +17,8 @@ const stateDefault = () => ({
     base: 20,
     rate: 2.5,
     penalty: 1,
-    maxPay: 20, // Maximum payout amount (changed from 100 to 20)
-    weekGoal: 50, // Weekly goal for approved points (changed from 10 to 50)
+    maxPay: 30, // Maximum payout amount (changed from 20 to 30)
+    weekGoal: 50, // Weekly goal for approved points
     parentPin: PARENT_PIN,
     autoApproveHours: AUTO_APPROVE_HOURS
   },
@@ -266,7 +266,7 @@ function showSetupModal() {
   document.getElementById('setupKid2Name').value = 'Kid 2';
   document.getElementById('setupKid2Emoji').value = '👩';
   document.getElementById('setupWeeklyPoints').value = 50;
-  document.getElementById('setupMaxPayout').value = 50;
+  document.getElementById('setupMaxPayout').value = 30;
   document.getElementById('setupParentPin').value = '';
   
   modal.showModal();
@@ -279,7 +279,7 @@ function handleSetupSubmit() {
   const kid2Name = document.getElementById('setupKid2Name').value.trim() || 'Kid 2';
   const kid2Emoji = document.getElementById('setupKid2Emoji').value.trim() || '👩';
   const weeklyPoints = parseInt(document.getElementById('setupWeeklyPoints').value) || 50;
-  const maxPayout = parseInt(document.getElementById('setupMaxPayout').value) || 50;
+  const maxPayout = parseInt(document.getElementById('setupMaxPayout').value) || 30;
   const parentPin = document.getElementById('setupParentPin').value.trim();
   
   // Update state with user settings
@@ -411,8 +411,10 @@ function calculatePayout() {
     // Calculate grade growth ratio for this kid
     const kidGradeGrowthRatio = calculateGradeGrowthRatio(kid);
     
-    // Calculate payout for this kid: (approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * maxPay
-    const kidPayout = (kidApprovedRatio * 0.55 + kidGradeGrowthRatio * 0.45) * state.config.maxPay;
+    // Calculate payout for this kid: base + (approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * (maxPay - base)
+    const kidPayout = state.config.base + 
+                     (kidApprovedRatio * 0.55 + kidGradeGrowthRatio * 0.45) * 
+                     (state.config.maxPay - state.config.base);
     
     return {
       id: kid.id,
