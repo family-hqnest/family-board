@@ -1,7 +1,7 @@
 // Family Achievement Board - Complete JavaScript
-const STORAGE_KEY = 'famboard-v1';
+const STORAGE_KEY = 'famboard-v2';
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const PARENT_PIN = '1234'; // Default PIN - should be configurable
+const PARENT_PIN = null; // Default PIN - should be configurable, null means not set
 const AUTO_APPROVE_HOURS = 48;
 
 const now = () => Date.now();
@@ -11,13 +11,14 @@ const formatDate = (ts) => new Date(ts).toLocaleDateString('en-US', { weekday: '
 
 // SYNC POINT: Default state structure
 const stateDefault = () => ({
-  version: 1,
+  version: 2, // Increment version for new payout formula
   weekStart: getWeekStart(),
   config: {
     base: 20,
     rate: 2.5,
     penalty: 1,
-    gradeScale: { A: 10, B: 7, C: 4, D: 1, F: 0 },
+    maxPay: 100, // Maximum payout amount
+    weekGoal: 10, // Weekly goal for approved points
     parentPin: PARENT_PIN,
     autoApproveHours: AUTO_APPROVE_HOURS
   },
@@ -27,19 +28,27 @@ const stateDefault = () => ({
       name: 'Kid 1',
       emoji: '👧',
       grade: 'B',
-      gradeHistory: [],
-      calc: {
-        Homework: { weight: 30, scores: [] },
-        Quizzes: { weight: 20, scores: [] },
-        Tests: { weight: 35, scores: [] },
-        Participation: { weight: 15, scores: [] }
-      }
+      baselineGrade: 'B', // Store baseline for growth comparison
+      subjects: {
+        math: { current: 'B', baseline: 'B' },
+        reading: { current: 'B', baseline: 'B' },
+        science: { current: 'B', baseline: 'B' },
+        social: { current: 'B', baseline: 'B' }
+      },
+      gradeHistory: []
     },
     {
       id: 'kid2',
       name: 'Kid 2',
       emoji: '👩',
       grade: 'B',
+      baselineGrade: 'B', // Store baseline for growth comparison
+      subjects: {
+        math: { current: 'B', baseline: 'B' },
+        reading: { current: 'B', baseline: 'B' },
+        science: { current: 'B', baseline: 'B' },
+        social: { current: 'B', baseline: 'B' }
+      },
       gradeHistory: []
     }
   ],
@@ -57,14 +66,74 @@ function getWeekStart(ts = now()) {
   return d.getTime();
 }
 
-// SYNC POINT: load from localStorage
+// SYNC POINT: load from localStorage with migration
 function load() {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return stateDefault();
+    
     const saved = JSON.parse(raw);
+    
+    // Migration from v1 to v2
+    if (saved.version === 1) {
+      console.log('Migrating from v1 to v2');
+      
+      // Migrate config
+      if (saved.config && saved.config.gradeScale) {
+        // Remove old gradeScale, add new fields
+        delete saved.config.gradeScale;
+        saved.config.maxPay = 100;
+        saved.config.weekGoal = 10;
+      }
+      
+      // Migrate kids
+      if (saved.kids && Array.isArray(saved.kids)) {
+        saved.kids.forEach(kid => {
+          // Add baseline grade (same as current grade)
+          kid.baselineGrade = kid.grade || 'B';
+          
+          // Add subjects structure
+          if (!kid.subjects) {
+            kid.subjects = {
+              math: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              reading: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              science: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              social: { current: kid.grade || 'B', baseline: kid.grade || 'B' }
+            };
+          }
+          
+          // Remove old calc structure if it exists
+          if (kid.calc) {
+            delete kid.calc;
+          }
+        });
+      }
+      
+      // Update version
+      saved.version = 2;
+    }
+    
     // Merge with defaults for any new properties
-    return { ...stateDefault(), ...saved };
+    const merged = { ...stateDefault(), ...saved };
+    
+    // Ensure all kids have the new structure
+    merged.kids.forEach(kid => {
+      if (!kid.subjects) {
+        kid.subjects = {
+          math: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          reading: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          science: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          social: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' }
+        };
+      }
+      
+      // Ensure baselineGrade exists
+      if (!kid.baselineGrade) {
+        kid.baselineGrade = kid.grade || 'B';
+      }
+    });
+    
+    return merged;
   } catch (e) {
     console.error('Load error:', e);
     return stateDefault();
@@ -199,30 +268,68 @@ function autoApprove48h() {
   if (changed) save();
 }
 
-// Payout calculation
+// Grade rank mapping
+const gradeRank = {
+  'A': 4, 'B': 3, 'C': 2, 'D': 1, 'F': 0
+};
+
+// Calculate grade growth ratio for a kid
+function calculateGradeGrowthRatio(kid) {
+  let totalScore = 0;
+  let totalMax = 0;
+  
+  // Calculate for each subject
+  for (const [subject, data] of Object.entries(kid.subjects)) {
+    const baseRank = gradeRank[data.baseline] || 0;
+    const currentRank = gradeRank[data.current] || 0;
+    const diff = currentRank - baseRank;
+    
+    // Subject score = Math.max(0, baseRank * 5 + diff * 10)
+    const subjectScore = Math.max(0, baseRank * 5 + diff * 10);
+    // Subject max = 4*5 + 4*10 = 60
+    const subjectMax = 4 * 5 + 4 * 10; // 60
+    
+    totalScore += subjectScore;
+    totalMax += subjectMax;
+  }
+  
+  // Avoid division by zero
+  if (totalMax === 0) return 0;
+  
+  return totalScore / totalMax;
+}
+
+// Payout calculation with new formula
 function calculatePayout() {
   const approved = state.chores.filter(c => c.status === 'approved').length;
   const rejected = state.chores.filter(c => c.status === 'rejected').length;
   const pending = state.chores.filter(c => c.status === 'pending').length;
   
-  const gradeBonus = state.kids.reduce((sum, k) => {
-    return sum + (state.config.gradeScale[k.grade] || 0);
-  }, 0);
+  // Calculate approved points ratio (capped at 1)
+  const approvedRatio = Math.min(approved / state.config.weekGoal, 1);
   
-  const total = state.config.base + 
-                (approved * state.config.rate) + 
-                gradeBonus - 
-                (rejected * state.config.penalty);
+  // Calculate average grade growth ratio across all kids
+  let totalGrowthRatio = 0;
+  state.kids.forEach(kid => {
+    totalGrowthRatio += calculateGradeGrowthRatio(kid);
+  });
+  const avgGrowthRatio = state.kids.length > 0 ? totalGrowthRatio / state.kids.length : 0;
+  
+  // New payout formula: (approvedRatio * 0.55 + avgGrowthRatio * 0.45) * maxPay
+  const total = (approvedRatio * 0.55 + avgGrowthRatio * 0.45) * state.config.maxPay;
   
   return {
     total: Math.max(0, total),
     approved,
     rejected,
     pending,
-    gradeBonus,
+    approvedRatio,
+    avgGrowthRatio,
     base: state.config.base,
     rate: state.config.rate,
-    penalty: state.config.penalty
+    penalty: state.config.penalty,
+    maxPay: state.config.maxPay,
+    weekGoal: state.config.weekGoal
   };
 }
 
@@ -279,10 +386,10 @@ function render() {
   document.getElementById('rejectedCount').textContent = payout.rejected;
   
   document.getElementById('payoutBreakdown').innerHTML = `
-    <div class="small">Base: ${formatMoney(payout.base)}</div>
-    <div class="small">Approved (${payout.approved} × ${payout.rate}): ${formatMoney(payout.approved * payout.rate)}</div>
-    <div class="small">Grade bonus: ${formatMoney(payout.gradeBonus)}</div>
-    <div class="small">Penalties: -${formatMoney(payout.rejected * payout.penalty)}</div>
+    <div class="small">Max payout: ${formatMoney(payout.maxPay)}</div>
+    <div class="small">Approved ratio: ${(payout.approvedRatio * 100).toFixed(1)}% (${payout.approved}/${payout.weekGoal})</div>
+    <div class="small">Grade growth: ${(payout.avgGrowthRatio * 100).toFixed(1)}%</div>
+    <div class="small">Formula: (${(payout.approvedRatio * 100).toFixed(1)}% × 0.55 + ${(payout.avgGrowthRatio * 100).toFixed(1)}% × 0.45) × ${formatMoney(payout.maxPay)}</div>
   `;
   
   // Update chore kid dropdown
@@ -310,15 +417,22 @@ function render() {
   
   // Update grades
   const gradeSummary = document.getElementById('gradeSummary');
-  gradeSummary.innerHTML = state.kids.map(k => `
+  gradeSummary.innerHTML = state.kids.map(k => {
+    const growthRatio = calculateGradeGrowthRatio(k);
+    return `
     <div class="row kid${k.id.slice(-1)}" style="margin:6px 0;padding:8px;background:rgba(0,0,0,0.1);border-radius:8px">
       <div style="flex:1">
         <b>${k.emoji || ''} ${k.name}</b>
-        <div class="small muted">${k.gradeHistory.slice(-1)[0]}% average</div>
+        <div class="small muted">Growth: ${(growthRatio * 100).toFixed(1)}%</div>
+        <div class="small muted" style="font-size:10px;margin-top:2px">
+          ${Object.entries(k.subjects).map(([subject, data]) => 
+            `${subject}: ${data.current} (baseline: ${data.baseline})`
+          ).join(' • ')}
+        </div>
       </div>
       <span class="pill grade-${k.grade.toLowerCase()}">${k.grade}</span>
     </div>
-  `).join('');
+  `}).join('');
   
   // Update activity log
   const activity = document.getElementById('activity');
@@ -597,31 +711,67 @@ function setupEventListeners() {
   const gradeModal = document.getElementById('gradeModal');
   document.getElementById('openGradeBtn').addEventListener('click', () => {
     const rows = document.getElementById('gradeRows');
-    rows.innerHTML = state.kids.map(k => `
-      <div class="row" style="margin:10px 0;align-items:center">
-        <label style="flex:1">${k.name}</label>
-        <select data-kid="${k.id}" style="width:100px">
-          ${['A', 'B', 'C', 'D', 'F'].map(g => 
-            `<option value="${g}" ${k.grade === g ? 'selected' : ''}>${g}</option>`
-          ).join('')}
-        </select>
-        <span class="small muted" style="margin-left:8px">
-          ${k.gradeHistory.slice(-1)[0]}% avg
-        </span>
-      </div>
-    `).join('');
+    rows.innerHTML = state.kids.map(k => {
+      const subjectsHtml = Object.entries(k.subjects).map(([subject, data]) => `
+        <div class="row" style="margin:5px 0;align-items:center">
+          <label style="flex:1;font-size:12px">${subject.charAt(0).toUpperCase() + subject.slice(1)}</label>
+          <select data-kid="${k.id}" data-subject="${subject}" data-type="current" style="width:80px;font-size:12px">
+            ${['A', 'B', 'C', 'D', 'F'].map(g => 
+              `<option value="${g}" ${data.current === g ? 'selected' : ''}>${g}</option>`
+            ).join('')}
+          </select>
+          <span class="small muted" style="margin-left:4px;font-size:10px">current</span>
+          <select data-kid="${k.id}" data-subject="${subject}" data-type="baseline" style="width:80px;font-size:12px;margin-left:8px">
+            ${['A', 'B', 'C', 'D', 'F'].map(g => 
+              `<option value="${g}" ${data.baseline === g ? 'selected' : ''}>${g}</option>`
+            ).join('')}
+          </select>
+          <span class="small muted" style="margin-left:4px;font-size:10px">baseline</span>
+        </div>
+      `).join('');
+      
+      return `
+        <div style="margin:15px 0;padding:10px;background:rgba(0,0,0,0.1);border-radius:8px">
+          <div style="font-weight:bold;margin-bottom:8px">${k.emoji || ''} ${k.name}</div>
+          ${subjectsHtml}
+        </div>
+      `;
+    }).join('');
     gradeModal.showModal();
   });
   
   document.getElementById('gradeCancel').addEventListener('click', () => gradeModal.close());
   document.getElementById('gradeSave').addEventListener('click', () => {
-    document.querySelectorAll('[data-kid]').forEach(select => {
+    document.querySelectorAll('[data-kid][data-subject]').forEach(select => {
       const kid = state.kids.find(k => k.id === select.dataset.kid);
-      if (kid) {
-        const oldGrade = kid.grade;
-        kid.grade = select.value;
-        if (oldGrade !== kid.grade) {
-          addLog(`Updated ${kid.name} grade: ${oldGrade} → ${kid.grade}`);
+      if (kid && kid.subjects[select.dataset.subject]) {
+        const type = select.dataset.type; // 'current' or 'baseline'
+        const oldValue = kid.subjects[select.dataset.subject][type];
+        const newValue = select.value;
+        
+        if (oldValue !== newValue) {
+          kid.subjects[select.dataset.subject][type] = newValue;
+          addLog(`Updated ${kid.name} ${select.dataset.subject} ${type}: ${oldValue} → ${newValue}`);
+          
+          // Update overall grade based on average of current subject grades
+          if (type === 'current') {
+            const currentGrades = Object.values(kid.subjects).map(s => s.current);
+            const gradeCounts = currentGrades.reduce((acc, grade) => {
+              acc[grade] = (acc[grade] || 0) + 1;
+              return acc;
+            }, {});
+            
+            // Find most common grade
+            let mostCommon = 'B';
+            let maxCount = 0;
+            for (const [grade, count] of Object.entries(gradeCounts)) {
+              if (count > maxCount) {
+                maxCount = count;
+                mostCommon = grade;
+              }
+            }
+            kid.grade = mostCommon;
+          }
         }
       }
     });
