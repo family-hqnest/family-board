@@ -25,20 +25,22 @@ const stateDefault = () => ({
     {
       id: 'kid1',
       name: 'Kid 1',
-      grade: 'A',
-      gradeHistory: [92, 94, 96],
+      emoji: '👧',
+      grade: 'B',
+      gradeHistory: [],
       calc: {
-        Homework: { weight: 30, scores: [92, 95, 91] },
-        Quizzes: { weight: 20, scores: [88, 90] },
-        Tests: { weight: 35, scores: [95, 97] },
-        Participation: { weight: 15, scores: [100, 100] }
+        Homework: { weight: 30, scores: [] },
+        Quizzes: { weight: 20, scores: [] },
+        Tests: { weight: 35, scores: [] },
+        Participation: { weight: 15, scores: [] }
       }
     },
     {
       id: 'kid2',
       name: 'Kid 2',
+      emoji: '👩',
       grade: 'B',
-      gradeHistory: [86, 89, 90]
+      gradeHistory: []
     }
   ],
   chores: [],
@@ -85,11 +87,86 @@ let pendingPinAction = null;
 
 // Initialize
 function init() {
+  // Check if this is first-time setup (no saved data or default names)
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const isFirstTime = !raw || (raw && JSON.parse(raw).kids?.[0]?.name === 'Kid 1');
+  
   weekGuard();
   setupEventListeners();
+  
+  if (isFirstTime) {
+    showSetupModal();
+  } else {
+    render();
+    startClock();
+    setupServiceWorker();
+  }
+}
+
+// Show first-time setup modal
+function showSetupModal() {
+  const modal = document.getElementById('setupModal');
+  if (!modal) return;
+  
+  // Set default values
+  document.getElementById('setupKid1Name').value = 'Sofi';
+  document.getElementById('setupKid1Emoji').value = '👧';
+  document.getElementById('setupKid2Name').value = 'Juli';
+  document.getElementById('setupKid2Emoji').value = '👩';
+  document.getElementById('setupWeeklyPoints').value = 50;
+  document.getElementById('setupMaxPayout').value = 50;
+  document.getElementById('setupParentPin').value = '';
+  
+  modal.showModal();
+}
+
+// Handle setup form submission
+function handleSetupSubmit() {
+  const kid1Name = document.getElementById('setupKid1Name').value.trim() || 'Kid 1';
+  const kid1Emoji = document.getElementById('setupKid1Emoji').value.trim() || '👧';
+  const kid2Name = document.getElementById('setupKid2Name').value.trim() || 'Kid 2';
+  const kid2Emoji = document.getElementById('setupKid2Emoji').value.trim() || '👩';
+  const weeklyPoints = parseInt(document.getElementById('setupWeeklyPoints').value) || 50;
+  const maxPayout = parseInt(document.getElementById('setupMaxPayout').value) || 50;
+  const parentPin = document.getElementById('setupParentPin').value.trim();
+  
+  // Update state with user settings
+  state.kids[0].name = kid1Name;
+  state.kids[0].emoji = kid1Emoji;
+  state.kids[1].name = kid2Name;
+  state.kids[1].emoji = kid2Emoji;
+  
+  // Update config
+  state.config.base = Math.min(maxPayout, 50); // Base payout
+  state.config.rate = maxPayout / weeklyPoints; // Rate per point
+  state.config.parentPin = parentPin || '1234'; // Default PIN if empty
+  
+  // Save and close
+  save();
+  
+  const modal = document.getElementById('setupModal');
+  if (modal) modal.close();
+  
+  // Start the app
   render();
   startClock();
   setupServiceWorker();
+  
+  // Add log entry
+  addLog(`First-time setup completed: ${kid1Name} ${kid1Emoji} & ${kid2Name} ${kid2Emoji}`);
+}
+
+// Handle setup skip
+function handleSetupSkip() {
+  const modal = document.getElementById('setupModal');
+  if (modal) modal.close();
+  
+  // Use defaults
+  render();
+  startClock();
+  setupServiceWorker();
+  
+  addLog('First-time setup skipped, using defaults');
 }
 
 // Week guard - auto-reset on new week
@@ -208,12 +285,35 @@ function render() {
     <div class="small">Penalties: -${formatMoney(payout.rejected * payout.penalty)}</div>
   `;
   
+  // Update chore kid dropdown
+  const choreKidSelect = document.getElementById('choreKid');
+  if (choreKidSelect) {
+    // Clear existing options except "Shared"
+    while (choreKidSelect.options.length > 0) {
+      choreKidSelect.remove(0);
+    }
+    
+    // Add kid options
+    state.kids.forEach(kid => {
+      const option = document.createElement('option');
+      option.value = kid.id;
+      option.textContent = `${kid.emoji || ''} ${kid.name}`;
+      choreKidSelect.appendChild(option);
+    });
+    
+    // Add shared option
+    const sharedOption = document.createElement('option');
+    sharedOption.value = 'shared';
+    sharedOption.textContent = 'Shared';
+    choreKidSelect.appendChild(sharedOption);
+  }
+  
   // Update grades
   const gradeSummary = document.getElementById('gradeSummary');
   gradeSummary.innerHTML = state.kids.map(k => `
     <div class="row kid${k.id.slice(-1)}" style="margin:6px 0;padding:8px;background:rgba(0,0,0,0.1);border-radius:8px">
       <div style="flex:1">
-        <b>${k.name}</b>
+        <b>${k.emoji || ''} ${k.name}</b>
         <div class="small muted">${k.gradeHistory.slice(-1)[0]}% average</div>
       </div>
       <span class="pill grade-${k.grade.toLowerCase()}">${k.grade}</span>
@@ -268,7 +368,7 @@ function renderChores() {
           ${chore.pinned ? '📌' : '📍'}
         </button>
         <div style="flex:1">
-          <div><b>${chore.name}</b> <span class="small muted">(${chore.points} pts • ${kid.name})</span></div>
+          <div><b>${chore.name}</b> <span class="small muted">(${chore.points} pts • ${kid.emoji || ''} ${kid.name})</span></div>
           <div class="small stat-${chore.status}">
             ${chore.status} ${timeAgo ? `• ${timeAgo}` : ''}
             ${chore.autoApproved ? '• ⚡ Auto' : ''}
@@ -390,6 +490,10 @@ function updateSparkline(data) {
 
 // Event Listeners
 function setupEventListeners() {
+  // Setup modal events
+  document.getElementById('setupSave')?.addEventListener('click', handleSetupSubmit);
+  document.getElementById('setupCancel')?.addEventListener('click', handleSetupSkip);
+  
   // Add chore
   document.getElementById('addChore').addEventListener('click', () => {
     const name = document.getElementById('choreName').value.trim();
@@ -594,10 +698,52 @@ function setupEventListeners() {
   // Settings modal
   const settingsModal = document.getElementById('settingsModal');
   document.getElementById('settingsBtn').addEventListener('click', () => {
+    // Clear PIN fields when opening settings
+    document.getElementById('currentPin').value = '';
+    document.getElementById('newPin').value = '';
+    document.getElementById('pinStatus').textContent = '';
     settingsModal.showModal();
   });
   document.getElementById('settingsClose').addEventListener('click', () => {
     settingsModal.close();
+  });
+  
+  // PIN update
+  document.getElementById('updatePinBtn').addEventListener('click', () => {
+    const currentPin = document.getElementById('currentPin').value;
+    const newPin = document.getElementById('newPin').value;
+    const pinStatus = document.getElementById('pinStatus');
+    
+    if (!currentPin) {
+      pinStatus.textContent = 'Please enter current PIN';
+      pinStatus.style.color = 'var(--danger)';
+      return;
+    }
+    
+    if (currentPin !== state.config.parentPin) {
+      pinStatus.textContent = 'Current PIN is incorrect';
+      pinStatus.style.color = 'var(--danger)';
+      return;
+    }
+    
+    if (newPin && (newPin.length !== 4 || !/^\d+$/.test(newPin))) {
+      pinStatus.textContent = 'New PIN must be 4 digits or empty to remove';
+      pinStatus.style.color = 'var(--danger)';
+      return;
+    }
+    
+    // Update or remove PIN
+    state.config.parentPin = newPin || '1234'; // Default if empty
+    save();
+    
+    pinStatus.textContent = newPin ? 'PIN updated successfully' : 'PIN removed (using default 1234)';
+    pinStatus.style.color = 'var(--ok)';
+    
+    // Clear fields
+    document.getElementById('currentPin').value = '';
+    document.getElementById('newPin').value = '';
+    
+    addLog(`Parent PIN ${newPin ? 'updated' : 'removed'}`);
   });
   
   // Export/Import
