@@ -133,10 +133,10 @@ h1 {
 .kid2-payout { grid-column: span 6; }
 
 /* Bottom section - full-width stacked rows */
-.chores { grid-column: 1 / -1; }
-.controls { grid-column: 1 / -1; }
-.grades { grid-column: 1 / -1; }
-.log { grid-column: 1 / -1; }
+.chores { grid-column: 1 / -1 !important; }
+.controls { grid-column: 1 / -1 !important; }
+.grades { grid-column: 1 / -1 !important; }
+.log { grid-column: 1 / -1 !important; }
 
 @media (max-width: 960px) {
   .kid1-payout, .kid2-payout {
