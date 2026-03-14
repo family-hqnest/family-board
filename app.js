@@ -247,6 +247,17 @@ function load() {
     // Merge with defaults for any new properties
     const merged = { ...stateDefault(), ...saved };
     
+    // Safety check: Ensure base is always $20 (fix for any incorrect setups)
+    if (merged.config) {
+      if (merged.config.base !== 20) {
+        console.log(`Fixing incorrect base: ${merged.config.base} → 20`);
+      }
+      merged.config.base = 20;
+      merged.config.pointValue = 0.20;
+      merged.config.weekGoal = 100;
+      merged.config.maxPay = Math.max(merged.config.maxPay || 30, 30); // At least $30
+    }
+    
     // Ensure all kids have the new structure
     merged.kids.forEach(kid => {
       if (!kid.subjects) {
@@ -347,8 +358,10 @@ function handleSetupSubmit() {
   state.kids[1].emoji = kid2Emoji;
   
   // Update config
-  state.config.base = Math.min(maxPayout, 50); // Base payout
-  state.config.rate = maxPayout / weeklyPoints; // Rate per point
+  state.config.base = 20; // Fixed base payout of $20
+  state.config.maxPay = maxPayout; // Maximum payout (e.g., $30)
+  state.config.weekGoal = weeklyPoints; // Weekly goal (e.g., 100 points)
+  state.config.pointValue = state.config.base / weeklyPoints; // $0.20 per point ($20 ÷ 100)
   state.config.parentPin = parentPin || null; // Default PIN if empty (changed from '1234' to null)
   
   // Save and close
