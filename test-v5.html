@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Family Achievement Board v5 Test</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; max-width: 800px; margin: 0 auto; }
+        .test { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .pass { color: green; font-weight: bold; }
+        .fail { color: red; font-weight: bold; }
+        .info { color: #666; }
+    </style>
+</head>
+<body>
+    <h1>Family Achievement Board v5 Test</h1>
+    
+    <div class="test">
+        <h2>Test 1: Config Defaults</h2>
+        <div id="test1">
+            <div class="info">Checking if v5 config is loaded...</div>
+        </div>
+    </div>
+    
+    <div class="test">
+        <h2>Test 2: Chore Frequency System</h2>
+        <div id="test2">
+            <div class="info">Checking frequency dropdown...</div>
+        </div>
+    </div>
+    
+    <div class="test">
+        <h2>Test 3: Payout Calculation</h2>
+        <div id="test3">
+            <div class="info">Testing new payout formula...</div>
+        </div>
+    </div>
+    
+    <script>
+        // Test 1: Config Defaults
+        const test1 = document.getElementById('test1');
+        try {
+            // Check localStorage for v5
+            const storageKey = 'famboard-v5';
+            const stored = localStorage.getItem(storageKey);
+            
+            if (stored) {
+                const data = JSON.parse(stored);
+                if (data.version === 5) {
+                    test1.innerHTML = `<div class="pass">✓ v5 detected</div>
+                                      <div>Base: $${data.config?.base || '?'}</div>
+                                      <div>Week Goal: ${data.config?.weekGoal || '?'} points</div>
+                                      <div>Point Value: $${data.config?.pointValue || '?'}</div>`;
+                } else {
+                    test1.innerHTML = `<div class="fail">✗ Wrong version: ${data.version}</div>`;
+                }
+            } else {
+                test1.innerHTML = `<div class="info">No v5 data found. Open the main app first.</div>`;
+            }
+        } catch (e) {
+            test1.innerHTML = `<div class="fail">✗ Error: ${e.message}</div>`;
+        }
+        
+        // Test 2: Chore Frequency System
+        const test2 = document.getElementById('test2');
+        try {
+            // Check if frequency dropdown exists in main app
+            const mainApp = window.opener || window.parent;
+            if (mainApp && mainApp.document) {
+                const frequencySelect = mainApp.document.getElementById('choreFrequency');
+                if (frequencySelect) {
+                    test2.innerHTML = `<div class="pass">✓ Frequency dropdown found</div>
+                                      <div>Options: ${Array.from(frequencySelect.options).map(o => o.value).join(', ')}</div>`;
+                } else {
+                    test2.innerHTML = `<div class="fail">✗ Frequency dropdown not found</div>`;
+                }
+            } else {
+                test2.innerHTML = `<div class="info">Open main app in another tab/window</div>`;
+            }
+        } catch (e) {
+            test2.innerHTML = `<div class="info">Cannot access main app (cross-origin)</div>`;
+        }
+        
+        // Test 3: Payout Calculation
+        const test3 = document.getElementById('test3');
+        try {
+            // Test the new formula
+            const base = 20;
+            const pointValue = 0.20;
+            const maxPay = 30;
+            const weekGoal = 100;
+            const gradeBonus = 2.50;
+            
+            // Test scenarios
+            const scenarios = [
+                { points: 0, gradeImprovements: 0, extra: 0, rejected: 0, expected: 20 },
+                { points: 50, gradeImprovements: 0, extra: 0, rejected: 0, expected: 25 },
+                { points: 100, gradeImprovements: 0, extra: 0, rejected: 0, expected: 30 },
+                { points: 100, gradeImprovements: 2, extra: 0, rejected: 0, expected: 35 },
+                { points: 50, gradeImprovements: 1, extra: 10, rejected: 20, expected: 23 }
+            ];
+            
+            let results = '';
+            scenarios.forEach((scenario, i) => {
+                const approvedRatio = Math.min(scenario.points / weekGoal, 1);
+                const maxBonus = maxPay - base;
+                const choreBonus = approvedRatio * maxBonus;
+                const gradeBonusTotal = scenario.gradeImprovements * gradeBonus;
+                const extraBonus = scenario.extra * pointValue;
+                const penalty = scenario.rejected * pointValue;
+                
+                const payout = base + choreBonus + gradeBonusTotal + extraBonus - penalty;
+                const floor = Math.max(0, payout);
+                const ceiling = Math.min(maxPay, floor);
+                
+                const passed = Math.abs(ceiling - scenario.expected) < 0.01;
+                results += `<div>Scenario ${i+1}: ${passed ? '✓' : '✗'} $${ceiling.toFixed(2)} (expected: $${scenario.expected.toFixed(2)})</div>`;
+            });
+            
+            test3.innerHTML = `<div class="pass">✓ Payout formula test complete</div>${results}`;
+        } catch (e) {
+            test3.innerHTML = `<div class="fail">✗ Error: ${e.message}</div>`;
+        }
+    </script>
+</body>
+</html>

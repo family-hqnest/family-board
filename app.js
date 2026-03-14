@@ -411,11 +411,6 @@ function autoApprove48h() {
       c.status = 'approved';
       c.autoApproved = true;
       
-      // For frequency chores: mark all instances as completed
-      if (c.instances && c.instances.total > 1) {
-        c.instances.completed = c.instances.total;
-      }
-      
       // No extra credit for auto-approve
       c.extra = { enabled: false, points: 0 };
       
@@ -768,7 +763,7 @@ function renderChores() {
           <div class="small stat-${chore.status}">
             ${chore.status} ${timeAgo ? `• ${timeAgo}` : ''}
             ${chore.autoApproved ? '• ⚡ Auto' : ''}
-            ${chore.instances && chore.instances.total > 1 ? `• ${chore.instances.completed}/${chore.instances.total} instances` : ''}
+            ${chore.totalInstances > 1 ? `• Instance ${chore.instanceNumber}/${chore.totalInstances}` : ''}
             ${chore.extra && chore.extra.enabled ? `• +${chore.extra.points} extra points` : ''}
           </div>
         </div>
@@ -1014,31 +1009,37 @@ function setupEventListeners() {
         break;
     }
     
-    const chore = {
-      id: uid(),
-      name,
-      points,
-      frequency,
-      kid,
-      status: 'pending',
-      pinned: false,
-      createdAt: now(),
-      completedAt: null,
-      autoApproved: false,
-      recurring: false,
-      instances: {
-        total: totalInstances,
-        completed: 0
-      },
-      extra: {
-        enabled: false,
-        points: 0
-      }
-    };
+    // Calculate points per instance
+    const pointsPerInstance = Math.round(points / totalInstances);
     
-    state.chores.unshift(chore);
+    // Create separate chore entries for each instance
+    for (let i = 0; i < totalInstances; i++) {
+      const chore = {
+        id: uid(),
+        name: `${name} (${i + 1}/${totalInstances})`,
+        originalName: name,
+        points: pointsPerInstance,
+        frequency,
+        instanceNumber: i + 1,
+        totalInstances,
+        kid,
+        status: 'pending',
+        pinned: false,
+        createdAt: now(),
+        completedAt: null,
+        autoApproved: false,
+        recurring: false,
+        extra: {
+          enabled: false,
+          points: 0
+        }
+      };
+      
+      state.chores.unshift(chore);
+    }
+    
     document.getElementById('choreName').value = '';
-    addLog(`Added chore: "${name}" (${frequency}, ${points} points) for ${kid === 'shared' ? 'shared' : state.kids.find(k => k.id === kid)?.name}`);
+    addLog(`Added ${frequency} chore: "${name}" (${points} total points, ${totalInstances} instances × ${pointsPerInstance} points each) for ${kid === 'shared' ? 'shared' : state.kids.find(k => k.id === kid)?.name}`);
     render();
   });
   
@@ -1431,11 +1432,6 @@ function executePinAction() {
     // For approve: mark as approved and ask about extra credit
     chore.status = 'approved';
     
-    // For frequency chores: mark all instances as completed
-    if (chore.instances && chore.instances.total > 1) {
-      chore.instances.completed = chore.instances.total;
-    }
-    
     // Ask about extra credit
     const extraPoints = prompt(`Approve "${chore.name}". Add extra credit points? (Enter 0 for none):`, "0");
     if (extraPoints !== null) {
@@ -1461,11 +1457,6 @@ function executePinAction() {
   } else {
     // For reject: mark as rejected
     chore.status = 'rejected';
-    
-    // For frequency chores: mark all instances as rejected
-    if (chore.instances && chore.instances.total > 1) {
-      chore.instances.completed = 0;
-    }
     
     addLog(`Parent rejected "${chore.name}"`);
   }
