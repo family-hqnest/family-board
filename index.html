@@ -24,17 +24,79 @@
     </header>
 
     <section class="grid">
-      <!-- Weekly Payout Card -->
+      <!-- Family Total Payout Card -->
       <article class="card kpi">
-        <h2>Weekly Payout</h2>
+        <h2>🏆 Family Total Payout</h2>
         <div class="money" id="payoutVal">$0.00</div>
-        <div class="small muted">Formula: base + approved×rate + gradeBonus − penalties</div>
+        <div class="small muted">Combined payout for all kids</div>
         <div class="row">
           <span class="small">Approved <b id="approvedCount">0</b></span>
           <span class="small">Pending <b id="pendingCount">0</b></span>
           <span class="small">Rejected <b id="rejectedCount">0</b></span>
         </div>
         <div class="small" id="payoutBreakdown"></div>
+      </article>
+
+      <!-- Kid 1 Payout Card -->
+      <article class="card kid-payout kid1-payout">
+        <h2 style="color: #ff4757">👧 <span id="kid1Name">Kid 1</span>'s Payout</h2>
+        <div class="money kid-money" id="kid1PayoutVal" style="color: #ff4757">$0.00</div>
+        <div class="small muted">Formula: base + (choreRatio × 0.55 + gradeGrowthRatio × 0.45) × (maxPay - base)</div>
+        
+        <!-- Progress Bar -->
+        <div class="progress-container">
+          <div class="progress-labels">
+            <span class="small">$20</span>
+            <span class="small">$30</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="kid1Progress" style="background: linear-gradient(90deg, #ff4757, #ff6b81);"></div>
+          </div>
+        </div>
+        
+        <div class="row" style="margin-top: 12px;">
+          <div class="kid-stats">
+            <div class="small"><b id="kid1ApprovedPts">0</b>/<span id="kid1WeekGoal">50</span> points</div>
+            <div class="small muted" id="kid1PendingCount">0 pending</div>
+          </div>
+          <div class="kid-stats">
+            <div class="small" id="kid1ChoreRatio">0% chores</div>
+            <div class="small" id="kid1GradeRatio">0% growth</div>
+          </div>
+        </div>
+        
+        <div class="small" id="kid1Breakdown" style="margin-top: 8px;"></div>
+      </article>
+
+      <!-- Kid 2 Payout Card -->
+      <article class="card kid-payout kid2-payout">
+        <h2 style="color: #00d2d3">👩 <span id="kid2Name">Kid 2</span>'s Payout</h2>
+        <div class="money kid-money" id="kid2PayoutVal" style="color: #00d2d3">$0.00</div>
+        <div class="small muted">Formula: base + (choreRatio × 0.55 + gradeGrowthRatio × 0.45) × (maxPay - base)</div>
+        
+        <!-- Progress Bar -->
+        <div class="progress-container">
+          <div class="progress-labels">
+            <span class="small">$20</span>
+            <span class="small">$30</span>
+          </div>
+          <div class="progress-bar">
+            <div class="progress-fill" id="kid2Progress" style="background: linear-gradient(90deg, #00d2d3, #2be9ff);"></div>
+          </div>
+        </div>
+        
+        <div class="row" style="margin-top: 12px;">
+          <div class="kid-stats">
+            <div class="small"><b id="kid2ApprovedPts">0</b>/<span id="kid2WeekGoal">50</span> points</div>
+            <div class="small muted" id="kid2PendingCount">0 pending</div>
+          </div>
+          <div class="kid-stats">
+            <div class="small" id="kid2ChoreRatio">0% chores</div>
+            <div class="small" id="kid2GradeRatio">0% growth</div>
+          </div>
+        </div>
+        
+        <div class="small" id="kid2Breakdown" style="margin-top: 8px;"></div>
       </article>
 
       <!-- Chores Card -->

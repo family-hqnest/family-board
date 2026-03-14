@@ -515,6 +515,54 @@ function render() {
     <div class="small">Formula: (${(payout.approvedRatio * 100).toFixed(1)}% × 0.55 + ${(payout.avgGrowthRatio * 100).toFixed(1)}% × 0.45) × ${formatMoney(payout.maxPay)}</div>
   `;
   
+  // Update individual kid payout cards
+  // Always update kid cards, even if kidPayouts is empty (use default/calculated values)
+  state.kids.forEach(kid => {
+    const kidId = kid.id;
+    
+    // Find this kid's payout from the payout object
+    const kidPayout = payout.kidPayouts?.find(p => p.id === kidId);
+    
+    // Calculate values if kidPayout doesn't exist
+    const approvedPts = kidPayout?.approvedPts || state.chores.filter(c => c.status === 'approved' && c.kid === kidId).length;
+    const approvedRatio = kidPayout?.approvedRatio || Math.min(approvedPts / state.config.weekGoal, 1);
+    const gradeGrowthRatio = kidPayout?.gradeGrowthRatio || calculateGradeGrowthRatio(kid);
+    const payoutValue = kidPayout?.payout || 
+      (state.config.base + (approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * (state.config.maxPay - state.config.base));
+    
+    // Update kid name
+    document.getElementById(`${kidId}Name`).textContent = kid.name;
+    
+    // Update payout value
+    document.getElementById(`${kidId}PayoutVal`).textContent = formatMoney(payoutValue);
+    
+    // Update progress bar (from $20 to $30)
+    const progressPercentage = ((payoutValue - 20) / 10) * 100;
+    const progressElement = document.getElementById(`${kidId}Progress`);
+    if (progressElement) {
+      progressElement.style.width = `${Math.max(0, Math.min(100, progressPercentage))}%`;
+    }
+    
+    // Update points and pending count
+    const pendingCount = state.chores.filter(c => c.status === 'pending' && c.kid === kidId).length;
+    document.getElementById(`${kidId}ApprovedPts`).textContent = approvedPts;
+    document.getElementById(`${kidId}WeekGoal`).textContent = state.config.weekGoal;
+    document.getElementById(`${kidId}PendingCount`).textContent = `${pendingCount} pending`;
+    
+    // Update ratios
+    document.getElementById(`${kidId}ChoreRatio`).textContent = `${(approvedRatio * 100).toFixed(1)}% chores`;
+    document.getElementById(`${kidId}GradeRatio`).textContent = `${(gradeGrowthRatio * 100).toFixed(1)}% growth`;
+    
+    // Update breakdown
+    document.getElementById(`${kidId}Breakdown`).innerHTML = `
+      <div class="small">Base: ${formatMoney(state.config.base)}</div>
+      <div class="small">Chore ratio: ${(approvedRatio * 100).toFixed(1)}% × 0.55 = ${(approvedRatio * 0.55 * 100).toFixed(1)}%</div>
+      <div class="small">Growth ratio: ${(gradeGrowthRatio * 100).toFixed(1)}% × 0.45 = ${(gradeGrowthRatio * 0.45 * 100).toFixed(1)}%</div>
+      <div class="small">Total ratio: ${(approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * 100}%</div>
+      <div class="small">Multiplier: ${formatMoney(state.config.maxPay - state.config.base)}</div>
+    `;
+  });
+  
   // Update chore kid dropdown
   const choreKidSelect = document.getElementById('choreKid');
   if (choreKidSelect) {
@@ -538,26 +586,16 @@ function render() {
     choreKidSelect.appendChild(sharedOption);
   }
   
-  // Update grades with individual payouts
+  // Update grades summary (simplified since payout is now in kid cards)
   const gradeSummary = document.getElementById('gradeSummary');
   gradeSummary.innerHTML = state.kids.map(k => {
     const growthRatio = calculateGradeGrowthRatio(k);
-    // Find this kid's payout from the payout object
-    const kidPayout = payout.kidPayouts?.find(p => p.id === k.id);
     
     return `
     <div class="row kid${k.id.slice(-1)}" style="margin:6px 0;padding:8px;background:rgba(0,0,0,0.1);border-radius:8px">
       <div style="flex:1">
         <b>${k.emoji || ''} ${k.name}</b>
         <div class="small muted">Growth: ${(growthRatio * 100).toFixed(1)}%</div>
-        ${kidPayout ? `
-        <div class="small" style="color:#8fff8f;margin-top:4px">
-          Payout: ${formatMoney(kidPayout.payout)}
-          <span class="muted" style="font-size:10px">
-            (${kidPayout.approvedPts}/${state.config.weekGoal} pts • ${(kidPayout.approvedRatio * 100).toFixed(1)}% × 0.55 + ${(kidPayout.gradeGrowthRatio * 100).toFixed(1)}% × 0.45)
-          </span>
-        </div>
-        ` : ''}
         <div class="small muted" style="font-size:10px;margin-top:2px">
           ${Object.entries(k.subjects).map(([subject, data]) => 
             `${subject}: ${data.current} (baseline: ${data.baseline})`

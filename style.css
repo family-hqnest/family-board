@@ -99,6 +99,22 @@ h1 {
   transition: transform 0.2s, box-shadow 0.2s;
 }
 
+/* Card grid spans */
+.card.kpi {
+  grid-column: span 12;
+}
+
+.card.kid-payout {
+  grid-column: span 6;
+}
+
+.card.chores,
+.card.controls,
+.card.grades,
+.card.log {
+  grid-column: span 4;
+}
+
 .card:hover {
   transform: translateY(-2px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
@@ -465,4 +481,112 @@ button.secondary:hover {
 #setupModal::backdrop {
   background: rgba(13, 13, 20, 0.9);
   backdrop-filter: blur(4px);
+}
+
+/* Kid Payout Cards */
+.kid-payout {
+  grid-column: span 6;
+  border-top: 4px solid;
+  animation: subtle-glow 3s ease-in-out infinite alternate;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kid1-payout {
+  border-color: #ff4757;
+  background: linear-gradient(145deg, rgba(255, 71, 87, 0.05), rgba(13, 13, 20, 0.3));
+}
+
+.kid2-payout {
+  border-color: #00d2d3;
+  background: linear-gradient(145deg, rgba(0, 210, 211, 0.05), rgba(13, 13, 20, 0.3));
+}
+
+.kid-money {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 8px 0;
+  text-shadow: 0 0 10px currentColor;
+  flex-shrink: 0;
+}
+
+/* Progress Bar */
+.progress-container {
+  margin: 12px 0;
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.progress-bar {
+  height: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 8px;
+  width: 0%;
+  transition: width 0.5s ease-out;
+  position: relative;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+/* Kid Stats */
+.kid-stats {
+  flex: 1;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* Responsive Grid */
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  
+  .card.kpi,
+  .kid-payout {
+    grid-column: span 6;
+  }
+  
+  .card.chores,
+  .card.controls,
+  .card.grades,
+  .card.log {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .kid-payout,
+  .card.chores,
+  .card.controls,
+  .card.grades,
+  .card.log {
+    grid-column: span 1;
+  }
+  
+  .kid-money {
+    font-size: 1.5rem;
+  }
+  
+  h2 {
+    font-size: 1.2rem;
+  }
 }
