@@ -239,9 +239,9 @@ let pendingPinAction = null;
 
 // Initialize
 function init() {
-  // Check if this is first-time setup (no saved data or default names)
+  // Check if this is first-time setup (no saved data)
   const raw = localStorage.getItem(STORAGE_KEY);
-  const isFirstTime = !raw || (raw && JSON.parse(raw).kids?.[0]?.name === 'Kid 1');
+  const isFirstTime = !raw;
   
   weekGuard();
   setupEventListeners();
