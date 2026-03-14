@@ -127,15 +127,19 @@ h1 {
   font-weight: 600;
 }
 
-/* Grid column spans */
-.kpi { grid-column: span 3; }
-.chores { grid-column: span 7; }
-.controls { grid-column: span 2; }
-.grades { grid-column: span 6; }
-.log { grid-column: span 6; }
+/* Grid column spans - Top section */
+.kpi { grid-column: span 12; }
+.kid1-payout { grid-column: span 6; }
+.kid2-payout { grid-column: span 6; }
+
+/* Bottom section - full-width stacked rows */
+.chores { grid-column: 1 / -1; }
+.controls { grid-column: 1 / -1; }
+.grades { grid-column: 1 / -1; }
+.log { grid-column: 1 / -1; }
 
 @media (max-width: 960px) {
-  .kpi, .chores, .controls, .grades, .log {
+  .kid1-payout, .kid2-payout {
     grid-column: 1 / -1;
   }
 }

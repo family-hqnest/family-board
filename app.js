@@ -1,5 +1,5 @@
 // Family Achievement Board - Complete JavaScript
-const STORAGE_KEY = 'famboard-v3';
+const STORAGE_KEY = 'famboard-v4';
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const PARENT_PIN = null; // Default PIN - should be configurable, null means not set
 const AUTO_APPROVE_HOURS = 48;
@@ -11,7 +11,7 @@ const formatDate = (ts) => new Date(ts).toLocaleDateString('en-US', { weekday: '
 
 // SYNC POINT: Default state structure
 const stateDefault = () => ({
-  version: 3, // Increment version for new payout formula and grade calculator
+  version: 4, // Increment version for new payout formula with rejected chore penalties
   weekStart: getWeekStart(),
   config: {
     base: 20,
@@ -184,6 +184,19 @@ function load() {
       }
       
       saved.version = 3;
+    }
+    
+    // Migration from v3 to v4
+    if (saved.version === 3) {
+      console.log('Migrating from v3 to v4');
+      
+      // Update config: base should be 20, maxPay should be 30
+      if (saved.config) {
+        saved.config.base = 20;
+        saved.config.maxPay = 30;
+      }
+      
+      saved.version = 4;
     }
     
     // Merge with defaults for any new properties
@@ -405,25 +418,40 @@ function calculatePayout() {
       c.status === 'approved' && c.kid === kid.id
     ).length;
     
+    // Calculate rejected chores for this kid (for penalty)
+    const kidRejectedCount = state.chores.filter(c => 
+      c.status === 'rejected' && c.kid === kid.id
+    ).length;
+    
     // Calculate approved ratio for this kid (capped at 1)
     const kidApprovedRatio = Math.min(kidApprovedPts / state.config.weekGoal, 1);
     
     // Calculate grade growth ratio for this kid
     const kidGradeGrowthRatio = calculateGradeGrowthRatio(kid);
     
-    // Calculate payout for this kid: base + (approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * (maxPay - base)
-    const kidPayout = state.config.base + 
-                     (kidApprovedRatio * 0.55 + kidGradeGrowthRatio * 0.45) * 
-                     (state.config.maxPay - state.config.base);
+    // Calculate base payout for this kid: base + (approvedRatio * 0.55 + gradeGrowthRatio * 0.45) * (maxPay - base)
+    const baseKidPayout = state.config.base + 
+                         (kidApprovedRatio * 0.55 + kidGradeGrowthRatio * 0.45) * 
+                         (state.config.maxPay - state.config.base);
+    
+    // Apply penalty for rejected chores: $0.50 per rejected chore
+    const penaltyAmount = kidRejectedCount * 0.50;
+    const kidPayoutAfterPenalty = baseKidPayout - penaltyAmount;
+    
+    // Minimum floor is base $20
+    const finalKidPayout = Math.max(state.config.base, kidPayoutAfterPenalty);
     
     return {
       id: kid.id,
       name: kid.name,
       emoji: kid.emoji,
       approvedPts: kidApprovedPts,
+      rejectedCount: kidRejectedCount,
       approvedRatio: kidApprovedRatio,
       gradeGrowthRatio: kidGradeGrowthRatio,
-      payout: Math.max(0, kidPayout)
+      basePayout: baseKidPayout,
+      penaltyAmount: penaltyAmount,
+      payout: Math.max(0, finalKidPayout)
     };
   });
   
@@ -437,7 +465,7 @@ function calculatePayout() {
   });
   const avgGrowthRatio = state.kids.length > 0 ? totalGrowthRatio / state.kids.length : 0;
   
-  // Calculate total payout (sum of all kid payouts)
+  // Calculate total payout (sum of all kid payouts) - FAMILY TOTAL
   const total = kidPayouts.reduce((sum, kid) => sum + kid.payout, 0);
   
   return {
