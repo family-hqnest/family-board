@@ -1,15 +1,59 @@
-// Family Achievement Board - Complete JavaScript
-const STORAGE_KEY = 'famboard-v5';
+// ── SUPABASE CONFIG ──────────────────────────────────────
+const SUPABASE_URL = 'https://fjvhkiynqejnbdbfwyxx.supabase.co';
+const SUPABASE_KEY = ' eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqdmhraXlucWVqbmJkYmZ3eXh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTQ2OTUsImV4cCI6MjA4OTA5MDY5NX0.Rk2APihye1Zut-k5Wmm7Kn3NmIWIvM74srtBM-8vjA4';
+const FAMILY_ID = 'family';
+const STORAGE_KEY = 'famboard-v3';
+
+// Supabase client (lightweight fetch wrapper — no CDN needed)
+const db = {
+  async load() {
+    try {
+      const res = await fetch(
+        `${SUPABASE_URL}/rest/v1/board_state?id=eq.${FAMILY_ID}&select=data`,
+        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
+      );
+      const rows = await res.json();
+      if (rows && rows.length > 0 && rows[0].data) return rows[0].data;
+      return null;
+    } catch(e) {
+      console.warn('Supabase load failed, using localStorage', e);
+      return null;
+    }
+  },
+  async save(state) {
+    try {
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/board_state`,
+        {
+          method: 'POST',
+          headers: {
+            'apikey': SUPABASE_KEY,
+            'Authorization': `Bearer ${SUPABASE_KEY}`,
+            'Content-Type': 'application/json',
+            'Prefer': 'resolution=merge-duplicates'
+          },
+          body: JSON.stringify({ id: FAMILY_ID, data: state, updated_at: new Date().toISOString() })
+        }
+      );
+      setSyncStatus('saved');
+    } catch(e) {
+      console.warn('Supabase save failed', e);
+      setSyncStatus('error');
+    }
+  }
+};
+
+function setSyncStatus(status) {
+  const dot = document.getElementById('syncDot');
+  if (!dot) return;
+  dot.className = 'sync-dot ' + status;
+  dot.title = status === 'saved' ? 'Synced' : status === 'saving' ? 'Saving...' : 'Sync error';
+}
+// ─────────────────────────────────────────────────────────
+
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const PARENT_PIN = null; // Default PIN - should be configurable, null means not set
+const PARENT_PIN = null;
 const AUTO_APPROVE_HOURS = 48;
-
-const now = () => Date.now();
-const uid = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-const formatMoney = (amount) => `$${amount.toFixed(2)}`;
-const formatDate = (ts) => new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
-
-// SYNC POINT: Default state structure
 const stateDefault = () => ({
   version: 5, // New version for updated scoring system with frequency chores
   weekStart: getWeekStart(),
@@ -78,14 +122,23 @@ function getWeekStart(ts = now()) {
   return d.getTime();
 }
 
-// SYNC POINT: load from localStorage with migration
-function load() {
+// SYNC POINT — replace localStorage with Supabase
+async function load() {
+  setSyncStatus('saving');
+  const remote = await db.load();
+  if (remote) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
+    setSyncStatus('saved');
+    return remote;
+  }
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return stateDefault();
-    
-    const saved = JSON.parse(raw);
-    
+    return JSON.parse(raw);
+  } catch(e) {
+    return stateDefault();
+  }
+}
     // Migration from v1 to v2
     if (saved.version === 1) {
       console.log('Migrating from v1 to v2');
@@ -292,12 +345,13 @@ function load() {
   }
 }
 
-// SYNC POINT: save to localStorage
-function save() {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    updateDataSize();
-  } catch (e) {
+// SYNC POINT — replace localStorage with Supabase
+async function save() {
+  setSyncStatus('saving');
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  await db.save(state);
+  updateDataSize();
+} catch (e) {
     console.error('Save error:', e);
   }
 }
@@ -307,10 +361,9 @@ let currentFilter = 'all';
 let pendingPinAction = null;
 
 // Initialize
-function init() {
-  // Check if this is first-time setup (no saved data)
-  const raw = localStorage.getItem(STORAGE_KEY);
-  const isFirstTime = !raw;
+async function init() {
+  state = await load();
+  const isFirstTime = !state || state.kids?.[0]?.name === 'Kid 1';
   
   weekGuard();
   setupEventListeners();
@@ -1704,7 +1757,7 @@ function setupServiceWorker() {
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init);
+  document.addEventListener('DOMContentLoaded', () => init());
 } else {
   init();
 }
