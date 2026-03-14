@@ -20,7 +20,6 @@
         <div class="clock" id="clock"></div>
         <button id="displayToggle">Display Mode</button>
         <button id="settingsBtn">Settings</button>
-        <button id="printBtn" onclick="window.print()">Print</button>
       </div>
     </header>
 
@@ -113,6 +112,25 @@
   <!-- Settings Modal -->
   <dialog id="settingsModal">
     <h3>Settings & Data</h3>
+    
+    <div class="setup-section" style="margin-bottom: 16px;">
+      <h4>Parent PIN Management</h4>
+      <div class="row">
+        <label style="flex:1">
+          Current PIN
+          <input id="currentPin" type="password" placeholder="Current PIN" style="width:100%" maxlength="4" />
+        </label>
+        <label style="flex:1">
+          New PIN (leave empty to remove)
+          <input id="newPin" type="password" placeholder="New PIN (4 digits)" style="width:100%" maxlength="4" />
+        </label>
+      </div>
+      <div class="row" style="justify-content:flex-end;margin-top:8px">
+        <button id="updatePinBtn" class="small">Update PIN</button>
+      </div>
+      <div class="small muted" id="pinStatus" style="margin-top:8px"></div>
+    </div>
+    
     <div class="row" style="margin:8px 0">
       <label style="flex:1">
         Passphrase
@@ -123,6 +141,7 @@
       <button id="exportBtn">Export Encrypted</button>
       <button id="importBtn">Import Encrypted</button>
       <button id="clearBtn">Clear Data</button>
+      <button id="resetAppBtn" style="background:var(--danger);color:white">Reset App</button>
     </div>
     <textarea id="blobArea" placeholder="Encrypted payload appears here..."></textarea>
     <div class="row" style="margin-top:12px">
@@ -169,6 +188,55 @@
     <div class="row" style="justify-content:flex-end;margin-top:16px">
       <button id="pinCancel">Cancel</button>
       <button id="pinSubmit">Submit</button>
+    </div>
+  </dialog>
+
+  <!-- First-Time Setup Modal -->
+  <dialog id="setupModal">
+    <h3>🏆 Welcome to Family Achievement Board!</h3>
+    <p class="small muted">Let's set up your family's achievement system.</p>
+    
+    <div class="setup-form">
+      <div class="setup-section">
+        <h4>Kid 1</h4>
+        <div class="row">
+          <input id="setupKid1Name" placeholder="Name (e.g., Sofi)" style="flex:1" />
+          <input id="setupKid1Emoji" placeholder="Emoji (e.g., 👧)" style="width:80px;text-align:center" maxlength="2" />
+        </div>
+      </div>
+      
+      <div class="setup-section">
+        <h4>Kid 2</h4>
+        <div class="row">
+          <input id="setupKid2Name" placeholder="Name (e.g., Juli)" style="flex:1" />
+          <input id="setupKid2Emoji" placeholder="Emoji (e.g., 👩)" style="width:80px;text-align:center" maxlength="2" />
+        </div>
+      </div>
+      
+      <div class="setup-section">
+        <h4>Weekly Goals</h4>
+        <div class="row">
+          <label style="flex:1">
+            Weekly Goal Points
+            <input id="setupWeeklyPoints" type="number" min="10" max="100" value="50" style="width:100%" />
+          </label>
+          <label style="flex:1">
+            Max Payout ($)
+            <input id="setupMaxPayout" type="number" min="10" max="100" value="50" style="width:100%" />
+          </label>
+        </div>
+      </div>
+      
+      <div class="setup-section">
+        <h4>Parent PIN (Optional)</h4>
+        <p class="small muted">Leave empty for no PIN protection</p>
+        <input id="setupParentPin" type="password" maxlength="4" placeholder="0000" style="width:120px;font-size:1.2rem;text-align:center;letter-spacing:6px" />
+      </div>
+    </div>
+    
+    <div class="row" style="justify-content:flex-end;margin-top:24px;gap:8px">
+      <button id="setupCancel" class="secondary">Skip & Use Defaults</button>
+      <button id="setupSave">Save & Start</button>
     </div>
   </dialog>
 

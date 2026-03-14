@@ -406,3 +406,63 @@ textarea {
     border: 1px solid #ccc;
   }
 }
+
+/* Setup Modal Styles */
+.setup-form {
+  margin: 20px 0;
+}
+
+.setup-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  border: var(--border);
+}
+
+.setup-section h4 {
+  margin: 0 0 12px 0;
+  color: var(--cyan);
+  font-size: 1.1rem;
+}
+
+.setup-section .row {
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.setup-section label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setup-section label .small {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+button.secondary {
+  background: var(--panel);
+  color: var(--muted);
+  border: var(--border);
+}
+
+button.secondary:hover {
+  background: #2a2c3f;
+  color: var(--txt);
+}
+
+#setupModal {
+  max-width: 500px;
+  width: 90%;
+  background: var(--card);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+#setupModal::backdrop {
+  background: rgba(13, 13, 20, 0.9);
+  backdrop-filter: blur(4px);
+}
