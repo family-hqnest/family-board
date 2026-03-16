@@ -312,11 +312,10 @@ async function load() {
 //       }
 //     });
     
-    return merged;
-//   } catch (e) {
-//     console.error('Load error:', e);
-//     return stateDefault();
-//   }
+     } catch(e) {
+    console.error('Load error:', e);
+    return stateDefault();
+  }
 }
 
 // SYNC POINT — replace localStorage with Supabase
