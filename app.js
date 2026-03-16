@@ -331,27 +331,42 @@ async function save() {
   }
 }
 
-let state = load();
+let state;
 let currentFilter = 'all';
 let pendingPinAction = null;
 
 // Initialize
 async function init() {
-  state = await load();
-  const isFirstTime = !state || state.kids?.[0]?.name === 'Kid 1';
-  console.log('First time check:', { hasState: !!state, kidName: state?.kids?.[0]?.name, isFirstTime });
-  
-  weekGuard();
-  setupEventListeners();
-  
-  if (isFirstTime) {
-    console.log('Showing setup modal');
-    // Small delay to ensure DOM is ready
+  try {
+    state = await load();
+    console.log('Loaded state:', state);
+    
+    // Ensure state is valid
+    if (!state || !state.kids || !Array.isArray(state.kids)) {
+      console.warn('Invalid state, using default');
+      state = stateDefault();
+    }
+    
+    const isFirstTime = !state || state.kids?.[0]?.name === 'Kid 1';
+    console.log('First time check:', { hasState: !!state, kidName: state?.kids?.[0]?.name, isFirstTime });
+    
+    weekGuard();
+    setupEventListeners();
+    
+    if (isFirstTime) {
+      console.log('Showing setup modal');
+      // Small delay to ensure DOM is ready
+      setTimeout(() => showSetupModal(), 100);
+    } else {
+      render();
+      startClock();
+      setupServiceWorker();
+    }
+  } catch (error) {
+    console.error('Init failed:', error);
+    // Fallback to default state and show setup modal
+    state = stateDefault();
     setTimeout(() => showSetupModal(), 100);
-  } else {
-    render();
-    startClock();
-    setupServiceWorker();
   }
 }
 
