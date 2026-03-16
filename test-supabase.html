@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase Test</title>
+    <script>
+        const SUPABASE_URL = 'https://fjvhkiynqejnbdbfwyxx.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqdmhraXlucWVqbmJkYmZ3eXh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTQ2OTUsImV4cCI6MjA4OTA5MDY5NX0.Rk2APihye1Zut-k5Wmm7Kn3NmIWIvM74srtBM-8vjA4';
+        const FAMILY_ID = 'family';
+
+        async function testSupabase() {
+            const result = document.getElementById('result');
+            result.innerHTML = 'Testing...';
+            
+            try {
+                // Test 1: Try to insert data
+                const insertRes = await fetch(
+                    `${SUPABASE_URL}/rest/v1/board_state`,
+                    {
+                        method: 'POST',
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`,
+                            'Content-Type': 'application/json',
+                            'Prefer': 'return=minimal'
+                        },
+                        body: JSON.stringify({
+                            id: FAMILY_ID,
+                            data: { test: 'working', timestamp: new Date().toISOString() },
+                            updated_at: new Date().toISOString()
+                        })
+                    }
+                );
+                
+                if (insertRes.ok) {
+                    result.innerHTML = '✅ INSERT SUCCESS! Table is working!';
+                } else {
+                    const error = await insertRes.text();
+                    result.innerHTML = `❌ INSERT FAILED (${insertRes.status}): ${error}`;
+                }
+                
+                // Test 2: Try to read data
+                const readRes = await fetch(
+                    `${SUPABASE_URL}/rest/v1/board_state?id=eq.${FAMILY_ID}`,
+                    {
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        }
+                    }
+                );
+                
+                if (readRes.ok) {
+                    const data = await readRes.json();
+                    result.innerHTML += `<br>✅ READ SUCCESS! Data: ${JSON.stringify(data)}`;
+                } else {
+                    const error = await readRes.text();
+                    result.innerHTML += `<br>❌ READ FAILED (${readRes.status}): ${error}`;
+                }
+                
+            } catch (error) {
+                result.innerHTML = `❌ ERROR: ${error.message}`;
+            }
+        }
+    </script>
+</head>
+<body>
+    <h1>Supabase Connection Test</h1>
+    <button onclick="testSupabase()">Test Supabase Connection</button>
+    <div id="result" style="margin-top: 20px; padding: 10px; border: 1px solid #ccc; min-height: 100px;"></div>
+</body>
+</html>

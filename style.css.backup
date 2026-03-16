@@ -1,0 +1,626 @@
+/* Family Achievement Board - Complete CSS */
+:root {
+  /* Core design tokens */
+  --bg: #0d0d14;
+  --card: #161623;
+  --panel: #1f2131;
+  --txt: #f5f7ff;
+  --muted: #9ca3b8;
+  
+  /* Kid colors */
+  --k1: #ff4d6d;
+  --k2: #2be9ff;
+  --k3: #f3c969;
+  --k4: #8fff8f;
+  
+  /* Status colors */
+  --ok: #3de18f;
+  --warn: #ffbf4d;
+  --danger: #ff667f;
+  --cyan: #2be9ff;
+  --gold: #f3c969;
+  --red: #ff4d6d;
+  
+  /* UI */
+  --radius: 16px;
+  --shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  --border: 1px solid #26283c;
+  --border-light: 1px solid #343852;
+  
+  /* Animations */
+  --glow-duration: 2s;
+  --scanline-duration: 3s;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: linear-gradient(180deg, var(--bg), #121423);
+  color: var(--txt);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  min-height: 100vh;
+  transition: background 0.3s;
+}
+
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* Header */
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: var(--border-light);
+}
+
+h1 {
+  margin: 0;
+  font: 700 1.6rem 'Righteous', cursive;
+  letter-spacing: 0.5px;
+}
+
+.brand {
+  background: linear-gradient(90deg, var(--k1), var(--k2));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.clock {
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Grid system */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.card {
+  background: var(--card);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+/* Card grid spans */
+.card.kpi {
+  grid-column: span 12;
+}
+
+.card.kid-payout {
+  grid-column: span 6;
+}
+
+.card.chores,
+.card.controls,
+.card.grades,
+.card.log {
+  grid-column: span 4;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.card h2 {
+  margin: 0 0 12px;
+  font-size: 1rem;
+  color: var(--txt);
+  font-weight: 600;
+}
+
+/* Grid column spans - Top section */
+.kpi { grid-column: span 12; }
+.kid1-payout { grid-column: span 6; }
+.kid2-payout { grid-column: span 6; }
+
+/* Bottom section - full-width stacked rows */
+.chores { grid-column: 1 / -1 !important; }
+.controls { grid-column: 1 / -1 !important; }
+.grades { grid-column: 1 / -1 !important; }
+.log { grid-column: 1 / -1 !important; }
+
+@media (max-width: 960px) {
+  .kid1-payout, .kid2-payout {
+    grid-column: 1 / -1;
+  }
+}
+
+/* Buttons and inputs */
+button, input, select {
+  background: var(--panel);
+  color: var(--txt);
+  border: var(--border-light);
+  border-radius: 10px;
+  padding: 8px 12px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+}
+
+button {
+  cursor: pointer;
+  font-weight: 500;
+}
+
+button:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+input:focus, select:focus, button:focus {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* Utility classes */
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.small {
+  font-size: 0.8rem;
+}
+
+.pill {
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  border: 1px solid #344;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+/* Chore list */
+.todo {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 12px;
+  background: #151728;
+  border: 1px solid #27293d;
+  margin-bottom: 8px;
+  transition: all 0.2s;
+}
+
+.todo.pin {
+  outline: 2px solid var(--gold);
+  background: #1a1d30;
+}
+
+.todo:hover {
+  background: #1a1d30;
+  border-color: #343852;
+}
+
+/* Status indicators */
+.stat-pending { color: var(--warn); }
+.stat-approved { color: var(--ok); }
+.stat-rejected { color: var(--danger); }
+
+/* Money display */
+.money {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+/* Dialogs */
+dialog {
+  border: var(--border-light);
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--txt);
+  max-width: 640px;
+  width: 90%;
+  padding: 20px;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+}
+
+textarea {
+  width: 100%;
+  min-height: 120px;
+  background: var(--panel);
+  color: var(--txt);
+  border: var(--border-light);
+  border-radius: 10px;
+  padding: 12px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+/* Drawer */
+.drawer {
+  position: fixed;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: min(460px, 100%);
+  background: #101220;
+  border-left: 1px solid #2a2d41;
+  transform: translateX(100%);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  padding: 20px;
+  overflow: auto;
+  z-index: 1000;
+  box-shadow: -10px 0 40px rgba(0, 0, 0, 0.5);
+}
+
+.drawer.open {
+  transform: translateX(0);
+}
+
+/* Sparkline */
+.spark {
+  width: 100%;
+  height: 110px;
+  background: #17192a;
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+/* Display mode */
+.hide-cursor {
+  cursor: none !important;
+}
+
+.display-mode .interactive {
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+.display-mode .card {
+  animation: subtle-glow var(--glow-duration) ease-in-out infinite alternate;
+}
+
+/* Animations */
+@keyframes fall {
+  to {
+    transform: translateY(110vh) rotate(550deg);
+    opacity: 0.2;
+  }
+}
+
+@keyframes subtle-glow {
+  from {
+    box-shadow: var(--shadow), 0 0 20px rgba(43, 233, 255, 0.1);
+  }
+  to {
+    box-shadow: var(--shadow), 0 0 30px rgba(43, 233, 255, 0.2);
+  }
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+@keyframes border-glow {
+  0%, 100% {
+    border-color: #26283c;
+    box-shadow: 0 0 10px rgba(43, 233, 255, 0);
+  }
+  50% {
+    border-color: var(--cyan);
+    box-shadow: 0 0 20px rgba(43, 233, 255, 0.3);
+  }
+}
+
+/* Confetti */
+.confetti {
+  position: fixed;
+  top: -10px;
+  width: 8px;
+  height: 14px;
+  animation: fall 2.4s linear forwards;
+  z-index: 999;
+  pointer-events: none;
+}
+
+/* Scanline effect */
+.scanline {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(to right, transparent, var(--cyan), transparent);
+  z-index: 998;
+  pointer-events: none;
+  animation: scanline var(--scanline-duration) linear infinite;
+}
+
+/* Glowing border for important items */
+.glow-border {
+  animation: border-glow var(--glow-duration) ease-in-out infinite;
+}
+
+/* Kid-specific styling */
+.kid1 { border-left: 3px solid var(--k1); }
+.kid2 { border-left: 3px solid var(--k2); }
+.kid3 { border-left: 3px solid var(--k3); }
+.kid4 { border-left: 3px solid var(--k4); }
+
+/* Grade colors */
+.grade-a { color: var(--ok); }
+.grade-b { color: var(--cyan); }
+.grade-c { color: var(--warn); }
+.grade-d { color: #ff8c42; }
+.grade-f { color: var(--danger); }
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .wrap {
+    padding: 12px;
+  }
+  
+  .todo {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  
+  .todo > * {
+    width: 100%;
+  }
+  
+  button, input, select {
+    padding: 10px;
+    font-size: 1rem;
+  }
+}
+
+/* Print styles */
+@media print {
+  .display-mode, .drawer, dialog,
+  button:not(#printBtn), #displayToggle,
+  #settingsBtn, #calcBtn {
+    display: none !important;
+  }
+  
+  .card {
+    break-inside: avoid;
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}
+
+/* Setup Modal Styles */
+.setup-form {
+  margin: 20px 0;
+}
+
+.setup-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: var(--panel);
+  border-radius: var(--radius);
+  border: var(--border);
+}
+
+.setup-section h4 {
+  margin: 0 0 12px 0;
+  color: var(--cyan);
+  font-size: 1.1rem;
+}
+
+.setup-section .row {
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.setup-section label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.setup-section label .small {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+button.secondary {
+  background: var(--panel);
+  color: var(--muted);
+  border: var(--border);
+}
+
+button.secondary:hover {
+  background: #2a2c3f;
+  color: var(--txt);
+}
+
+#setupModal {
+  max-width: 500px;
+  width: 90%;
+  background: var(--card);
+  border: var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+#setupModal::backdrop {
+  background: rgba(13, 13, 20, 0.9);
+  backdrop-filter: blur(4px);
+}
+
+/* Kid Payout Cards */
+.kid-payout {
+  grid-column: span 6;
+  border-top: 4px solid;
+  animation: subtle-glow 3s ease-in-out infinite alternate;
+  min-height: 280px;
+  display: flex;
+  flex-direction: column;
+}
+
+.kid1-payout {
+  border-color: #ff4757;
+  background: linear-gradient(145deg, rgba(255, 71, 87, 0.05), rgba(13, 13, 20, 0.3));
+}
+
+.kid2-payout {
+  border-color: #00d2d3;
+  background: linear-gradient(145deg, rgba(0, 210, 211, 0.05), rgba(13, 13, 20, 0.3));
+}
+
+.kid-money {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 8px 0;
+  text-shadow: 0 0 10px currentColor;
+  flex-shrink: 0;
+}
+
+/* Progress Bar */
+.progress-container {
+  margin: 12px 0;
+}
+
+.progress-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  color: var(--muted);
+}
+
+.progress-bar {
+  height: 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: 8px;
+  width: 0%;
+  transition: width 0.5s ease-out;
+  position: relative;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+}
+
+/* Kid Stats */
+.kid-stats {
+  flex: 1;
+  padding: 8px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  text-align: center;
+}
+
+/* Responsive Grid */
+@media (max-width: 768px) {
+  .grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+  
+  .card.kpi,
+  .kid-payout {
+    grid-column: span 6;
+  }
+  
+  .card.chores,
+  .card.controls,
+  .card.grades,
+  .card.log {
+    grid-column: span 6;
+  }
+}
+
+@media (max-width: 480px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  
+  .kid-payout,
+  .card.chores,
+  .card.controls,
+  .card.grades,
+  .card.log {
+    grid-column: span 1;
+  }
+  
+  .kid-money {
+    font-size: 1.5rem;
+  }
+  
+  h2 {
+    font-size: 1.2rem;
+  }
+}
+/* Sync dot styles */
+.sync-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  margin-left: 8px;
+  vertical-align: middle;
+  font-size: 20px;
+  line-height: 1;
+  transition: all 0.3s ease;
+}
+
+.sync-dot.syncing {
+  background-color: var(--warn);
+  animation: pulse 1.5s infinite;
+}
+
+.sync-dot.online {
+  background-color: var(--ok);
+}
+
+.sync-dot.offline {
+  background-color: var(--muted);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

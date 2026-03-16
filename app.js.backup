@@ -1,140 +1,83 @@
-// ── SUPABASE CONFIG ──────────────────────────────────────
-const SUPABASE_URL = 'https://fjvhkiynqejnbdbfwyxx.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqdmhraXlucWVqbmJkYmZ3eXh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTQ2OTUsImV4cCI6MjA4OTA5MDY5NX0.Rk2APihye1Zut-k5Wmm7Kn3NmIWIvM74srtBM-8vjA4';
-const FAMILY_ID = 'family';
+// Family Achievement Board - Complete JavaScript
 const STORAGE_KEY = 'famboard-v6';
-
-// Supabase client (lightweight fetch wrapper — no CDN needed)
-const db = {
-  async load() {
-    try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/board_state?id=eq.${FAMILY_ID}&select=data`,
-        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
-      );
-      
-      if (!res.ok) {
-        console.warn(`Supabase load failed with status ${res.status}, using localStorage`);
-        return null;
-      }
-      
-      const rows = await res.json();
-      if (rows && rows.length > 0 && rows[0].data) {
-        console.log('✅ Loaded data from Supabase');
-        return rows[0].data;
-      }
-      
-      console.log('No data in Supabase yet');
-      return null;
-    } catch(e) {
-      console.warn('Supabase load failed, using localStorage', e);
-      return null;
-    }
-  },
-  async save(state) {
-    try {
-      // Try to upsert using PUT
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/board_state?id=eq.${FAMILY_ID}`,
-        {
-          method: 'PUT',
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({ id: FAMILY_ID, data: state, updated_at: new Date().toISOString() })
-        }
-      );
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.warn(`Supabase PUT failed (${res.status}):`, errorText);
-        
-        // Try POST as fallback
-        const postRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/board_state`,
-          {
-            method: 'POST',
-            headers: {
-              'apikey': SUPABASE_KEY,
-              'Authorization': `Bearer ${SUPABASE_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ id: FAMILY_ID, data: state, updated_at: new Date().toISOString() })
-          }
-        );
-        
-        if (!postRes.ok) {
-          const postError = await postRes.text();
-          console.warn(`Supabase POST also failed (${postRes.status}):`, postError);
-          throw new Error(`Supabase sync failed: ${postError}`);
-        }
-        
-        console.log('✅ Saved to Supabase via POST');
-      } else {
-        console.log('✅ Saved to Supabase via PUT');
-      }
-      
-      setSyncStatus('saved');
-    } catch(e) {
-      console.warn('Supabase save failed, data saved locally only', e);
-      setSyncStatus('error');
-      
-      // Show a user-friendly error in the console
-      if (e.message && e.message.includes('row-level security')) {
-        console.log(`
-⚠️  SUPABASE SETUP REQUIRED:
-The 'board_state' table has Row Level Security (RLS) enabled.
-You need to create a policy to allow anonymous access:
-
-1. Go to Supabase Dashboard → Table Editor → board_state → Policies
-2. Click "Create new policy"
-3. Choose "For full customization"
-4. Name: "Allow anonymous access"
-5. Using expression: "auth.role() = 'anon'"
-6. With check expression: "auth.role() = 'anon'"
-7. Save
-
-Or run this SQL in the SQL Editor:
-CREATE POLICY "Allow anonymous access" ON board_state
-  FOR ALL USING (auth.role() = 'anon');
-`);
-      } else if (e.message && e.message.includes("Could not find the 'data' column")) {
-        console.log(`
-⚠️  SUPABASE TABLE SETUP REQUIRED:
-The 'board_state' table might not have the right schema.
-Create the table with this SQL:
-
-CREATE TABLE board_state (
-  id TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-ALTER TABLE board_state ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow anonymous access" ON board_state
-  FOR ALL USING (auth.role() = 'anon');
-`);
-      }
-    }
-  }
-};
-
-function setSyncStatus(status) {
-  const dot = document.getElementById('syncDot');
-  if (!dot) return;
-  dot.className = 'sync-dot ' + status;
-  dot.title = status === 'saved' ? 'Synced' : status === 'saving' ? 'Saving...' : 'Sync error';
-}
-// ─────────────────────────────────────────────────────────
-
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const PARENT_PIN = null;
+const PARENT_PIN = null; // Default PIN - should be configurable, null means not set
 const AUTO_APPROVE_HOURS = 48;
+
+// Supabase Configuration
+const SUPABASE_URL = 'https://fjvhkiynqejnbdbfwyxx.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqdmhraXlucWVqbmJkYmZ3eXh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTQ2OTUsImV4cCI6MjA4OTA5MDY5NX0.Rk2APihye1Zut-k5Wmm7Kn3NmIWIvM74srtBM-8vjA4';
+
+const now = () => Date.now();
+const uid = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+const formatMoney = (amount) => `$${amount.toFixed(2)}`;
+const formatDate = (ts) => new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+
+// Sync state
+let isOnline = navigator.onLine;
+let isSyncing = false;
+let syncRetryCount = 0;
+const MAX_SYNC_RETRIES = 3;
+
+// Supabase client (loaded dynamically to avoid errors if Supabase is blocked)
+let supabase = null;
+
+async function initSupabase() {
+  if (typeof createClient === 'undefined') {
+    // Load Supabase client dynamically
+    try {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      script.onload = () => {
+        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        console.log('Supabase client loaded');
+        if (isOnline) {
+          syncFromSupabase().catch(console.error);
+        }
+      };
+      document.head.appendChild(script);
+    } catch (e) {
+      console.warn('Failed to load Supabase client:', e);
+    }
+  } else {
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  }
+}
+
+// Update sync dot UI
+function updateSyncDot() {
+  const syncDot = document.getElementById('syncDot');
+  if (!syncDot) return;
+  
+  if (isSyncing) {
+    syncDot.className = 'sync-dot syncing';
+    syncDot.title = 'Syncing to cloud...';
+  } else if (!isOnline) {
+    syncDot.className = 'sync-dot offline';
+    syncDot.title = 'Offline - using local storage';
+  } else {
+    syncDot.className = 'sync-dot online';
+    syncDot.title = 'Online - synced with cloud';
+  }
+}
+
+// Network status listeners
+window.addEventListener('online', () => {
+  isOnline = true;
+  updateSyncDot();
+  console.log('Online - attempting sync');
+  syncToSupabase().catch(console.error);
+});
+
+window.addEventListener('offline', () => {
+  isOnline = false;
+  updateSyncDot();
+  console.log('Offline - using local storage only');
+});
+
+// SYNC POINT: Default state structure
 const stateDefault = () => ({
-  version: 5, // New version for updated scoring system with frequency chores
+  version: 6, // v6: Added Supabase sync integration
   weekStart: getWeekStart(),
   config: {
     base: 20, // Starting payout per kid per week
@@ -201,249 +144,384 @@ function getWeekStart(ts = now()) {
   return d.getTime();
 }
 
-// SYNC POINT — replace localStorage with Supabase
+// SYNC POINT: load from localStorage with migration, with Supabase sync
 async function load() {
-  setSyncStatus('saving');
-  const remote = await db.load();
-  if (remote) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
-    setSyncStatus('saved');
-    return remote;
-  }
   try {
+    // Try to load from Supabase first if online and Supabase is available
+    if (isOnline && supabase) {
+      try {
+        isSyncing = true;
+        updateSyncDot();
+        
+        const { data, error } = await supabase
+          .from('family_board')
+          .select('data, updated_at')
+          .order('updated_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (!error && data) {
+          console.log('Loaded from Supabase:', data.updated_at);
+          const saved = data.data;
+          
+          // Apply migrations if needed
+          const migrated = applyMigrations(saved);
+          
+          // Save to localStorage as backup
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+          
+          isSyncing = false;
+          updateSyncDot();
+          return migrated;
+        }
+      } catch (supabaseError) {
+        console.warn('Supabase load failed, falling back to localStorage:', supabaseError);
+      } finally {
+        isSyncing = false;
+        updateSyncDot();
+      }
+    }
+    
+    // Fall back to localStorage
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return stateDefault();
-    return JSON.parse(raw);
-  } catch(e) {
+    
+    const saved = JSON.parse(raw);
+    
+    // Apply migrations inline
+    // Migration from v1 to v2
+    if (saved.version === 1) {
+      console.log('Migrating from v1 to v2');
+      
+      // Migrate config
+      if (saved.config && saved.config.gradeScale) {
+        // Remove old gradeScale, add new fields
+        delete saved.config.gradeScale;
+        saved.config.maxPay = 100;
+        saved.config.weekGoal = 10;
+      }
+      
+      // Migrate kids
+      if (saved.kids && Array.isArray(saved.kids)) {
+        saved.kids.forEach(kid => {
+          // Add baseline grade (same as current grade)
+          kid.baselineGrade = kid.grade || 'B';
+          
+          // Add subjects structure
+          if (!kid.subjects) {
+            kid.subjects = {
+              Math: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              English: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              Science: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
+              History: { current: kid.grade || 'B', baseline: kid.grade || 'B' }
+            };
+          }
+          
+          // Remove old calc structure if it exists
+          if (kid.calc) {
+            delete kid.calc;
+          }
+          
+          // Add gradeCalc structure if it doesn't exist
+          if (!kid.gradeCalc) {
+            kid.gradeCalc = {
+              Math: { tests: [], quizzes: [], homework: [] },
+              English: { tests: [], quizzes: [], homework: [] },
+              Science: { tests: [], quizzes: [], homework: [] },
+              History: { tests: [], quizzes: [], homework: [] }
+            };
+          }
+        });
+      }
+      
+      // Update version
+      saved.version = 2;
+    }
+    
+    // Migration from v2 to v3
+    if (saved.version === 2) {
+      console.log('Migrating from v2 to v3');
+      
+      // Update config defaults
+      if (saved.config) {
+        saved.config.maxPay = 20; // Changed from 100 to 20
+        saved.config.weekGoal = 50; // Changed from 10 to 50
+        
+        // Update PIN fallback from '1234' to null
+        if (saved.config.parentPin === '1234') {
+          saved.config.parentPin = null;
+        }
+      }
+      
+      // Update subject names from lowercase to proper case
+      if (saved.kids && Array.isArray(saved.kids)) {
+        saved.kids.forEach(kid => {
+          if (kid.subjects) {
+            // Rename subjects
+            const newSubjects = {};
+            if (kid.subjects.math) {
+              newSubjects.Math = kid.subjects.math;
+            }
+            if (kid.subjects.reading) {
+              newSubjects.English = kid.subjects.reading;
+            }
+            if (kid.subjects.science) {
+              newSubjects.Science = kid.subjects.science;
+            }
+            if (kid.subjects.social) {
+              newSubjects.History = kid.subjects.social;
+            }
+            kid.subjects = newSubjects;
+          }
+          
+          // Add gradeCalc structure
+          if (!kid.gradeCalc) {
+            kid.gradeCalc = {
+              Math: { tests: [], quizzes: [], homework: [] },
+              English: { tests: [], quizzes: [], homework: [] },
+              Science: { tests: [], quizzes: [], homework: [] },
+              History: { tests: [], quizzes: [], homework: [] }
+            };
+          }
+        });
+      }
+      
+      saved.version = 3;
+    }
+    
+    // Migration from v3 to v4
+    if (saved.version === 3) {
+      console.log('Migrating from v3 to v4');
+      
+      // Update config: base should be 0, maxPay should be 30
+      if (saved.config) {
+        saved.config.base = 0;
+        saved.config.maxPay = 30;
+      }
+      
+      saved.version = 4;
+    }
+    
+    // Migration from v4 to v5
+    if (saved.version === 4) {
+      console.log('Migrating from v4 to v5');
+      
+      // Update config for new scoring system
+      if (saved.config) {
+        saved.config.base = 20; // Starting at $20
+        saved.config.pointValue = 0.20; // $0.20 per point
+        saved.config.weekGoal = 100; // Increased from 50
+        saved.config.gradeBonusPerSubject = 2.50; // $2.50 per improved subject
+        
+        // Remove old fields if they exist
+        delete saved.config.rate;
+        delete saved.config.penalty;
+      }
+      
+      // Update all chores to add frequency and extra credit fields
+      if (saved.chores && Array.isArray(saved.chores)) {
+        saved.chores.forEach(chore => {
+          // Add frequency field (default to 'weekly' for existing chores)
+          if (!chore.frequency) {
+            chore.frequency = 'weekly';
+          }
+          
+          // Add instances tracking (default to 1/1 for existing chores)
+          if (!chore.instances) {
+            chore.instances = {
+              total: 1,
+              completed: chore.status === 'approved' || chore.status === 'pending' ? 1 : 0
+            };
+          }
+          
+          // Add extra credit field
+          if (!chore.extra) {
+            chore.extra = {
+              enabled: false,
+              points: 0
+            };
+          }
+        });
+      }
+      
+      saved.version = 5;
+    }
+    
+    // Migration from v5 to v6 (Supabase sync)
+    if (saved.version === 5) {
+      console.log('Migrating from v5 to v6 (Supabase sync)');
+      
+      // No data structure changes needed for v6
+      // Just updating version for Supabase sync feature
+      
+      saved.version = 6;
+    }
+    
+    // Merge with defaults for any new properties
+    const merged = { ...stateDefault(), ...saved };
+    
+    // Safety check: Ensure base is always $20 (fix for any incorrect setups)
+    if (merged.config) {
+      if (merged.config.base !== 20) {
+        console.log(`Fixing incorrect base: ${merged.config.base} → 20`);
+      }
+      merged.config.base = 20;
+      merged.config.pointValue = 0.20;
+      merged.config.weekGoal = 100;
+      merged.config.maxPay = Math.max(merged.config.maxPay || 30, 30); // At least $30
+    }
+    
+    // Ensure all kids have the new structure
+    merged.kids.forEach(kid => {
+      if (!kid.subjects) {
+        kid.subjects = {
+          Math: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          English: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          Science: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
+          History: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' }
+        };
+      }
+      
+      // Ensure baselineGrade exists
+      if (!kid.baselineGrade) {
+        kid.baselineGrade = kid.grade || 'B';
+      }
+      
+      // Ensure gradeCalc exists
+      if (!kid.gradeCalc) {
+        kid.gradeCalc = {
+          Math: { tests: [], quizzes: [], homework: [] },
+          English: { tests: [], quizzes: [], homework: [] },
+          Science: { tests: [], quizzes: [], homework: [] },
+          History: { tests: [], quizzes: [], homework: [] }
+        };
+      }
+    });
+    
+    return merged;
+  } catch (e) {
+    console.error('Load error:', e);
     return stateDefault();
   }
 }
-    // Migration from v1 to v2
-//     if (saved.version === 1) {
-//       console.log('Migrating from v1 to v2');
-//       
-      // Migrate config
-//       if (saved.config && saved.config.gradeScale) {
-        // Remove old gradeScale, add new fields
-//         delete saved.config.gradeScale;
-//         saved.config.maxPay = 100;
-//         saved.config.weekGoal = 10;
-//       }
-//       
-      // Migrate kids
-//       if (saved.kids && Array.isArray(saved.kids)) {
-//         saved.kids.forEach(kid => {
-          // Add baseline grade (same as current grade)
-//           kid.baselineGrade = kid.grade || 'B';
-//           
-          // Add subjects structure
-//           if (!kid.subjects) {
-//             kid.subjects = {
-//               Math: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
-//               English: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
-//               Science: { current: kid.grade || 'B', baseline: kid.grade || 'B' },
-//               History: { current: kid.grade || 'B', baseline: kid.grade || 'B' }
-//             };
-//           }
-//           
-          // Remove old calc structure if it exists
-//           if (kid.calc) {
-//             delete kid.calc;
-//           }
-//           
-          // Add gradeCalc structure if it doesn't exist
-//           if (!kid.gradeCalc) {
-//             kid.gradeCalc = {
-//               Math: { tests: [], quizzes: [], homework: [] },
-//               English: { tests: [], quizzes: [], homework: [] },
-//               Science: { tests: [], quizzes: [], homework: [] },
-//               History: { tests: [], quizzes: [], homework: [] }
-//             };
-//           }
-//         });
-//       }
-//       
-      // Update version
-//       saved.version = 2;
-//     }
-//     
-    // Migration from v2 to v3
-//     if (saved.version === 2) {
-//       console.log('Migrating from v2 to v3');
-//       
-      // Update config defaults
-//       if (saved.config) {
-//         saved.config.maxPay = 20; // Changed from 100 to 20
-//         saved.config.weekGoal = 50; // Changed from 10 to 50
-//         
-        // Update PIN fallback from '1234' to null
-//         if (saved.config.parentPin === '1234') {
-//           saved.config.parentPin = null;
-//         }
-//       }
-//       
-      // Update subject names from lowercase to proper case
-//       if (saved.kids && Array.isArray(saved.kids)) {
-//         saved.kids.forEach(kid => {
-//           if (kid.subjects) {
-            // Rename subjects
-//             const newSubjects = {};
-//             if (kid.subjects.math) {
-//               newSubjects.Math = kid.subjects.math;
-//             }
-//             if (kid.subjects.reading) {
-//               newSubjects.English = kid.subjects.reading;
-//             }
-//             if (kid.subjects.science) {
-//               newSubjects.Science = kid.subjects.science;
-//             }
-//             if (kid.subjects.social) {
-//               newSubjects.History = kid.subjects.social;
-//             }
-//             kid.subjects = newSubjects;
-//           }
-//           
-          // Add gradeCalc structure
-//           if (!kid.gradeCalc) {
-//             kid.gradeCalc = {
-//               Math: { tests: [], quizzes: [], homework: [] },
-//               English: { tests: [], quizzes: [], homework: [] },
-//               Science: { tests: [], quizzes: [], homework: [] },
-//               History: { tests: [], quizzes: [], homework: [] }
-//             };
-//           }
-//         });
-//       }
-//       
-//       saved.version = 3;
-//     }
-//     
-    // Migration from v3 to v4
-//     if (saved.version === 3) {
-//       console.log('Migrating from v3 to v4');
-//       
-      // Update config: base should be 0, maxPay should be 30
-//       if (saved.config) {
-//         saved.config.base = 0;
-//         saved.config.maxPay = 30;
-//       }
-//       
-//       saved.version = 4;
-//     }
-//     
-    // Migration from v4 to v5
-//     if (saved.version === 4) {
-//       console.log('Migrating from v4 to v5');
-//       
-      // Update config for new scoring system
-//       if (saved.config) {
-//         saved.config.base = 20; // Starting at $20
-//         saved.config.pointValue = 0.20; // $0.20 per point
-//         saved.config.weekGoal = 100; // Increased from 50
-//         saved.config.gradeBonusPerSubject = 2.50; // $2.50 per improved subject
-//         
-        // Remove old fields if they exist
-//         delete saved.config.rate;
-//         delete saved.config.penalty;
-//       }
-//       
-      // Update all chores to add frequency and extra credit fields
-//       if (saved.chores && Array.isArray(saved.chores)) {
-//         saved.chores.forEach(chore => {
-          // Add frequency field (default to 'weekly' for existing chores)
-//           if (!chore.frequency) {
-//             chore.frequency = 'weekly';
-//           }
-//           
-          // Add instances tracking (default to 1/1 for existing chores)
-//           if (!chore.instances) {
-//             chore.instances = {
-//               total: 1,
-//               completed: chore.status === 'approved' || chore.status === 'pending' ? 1 : 0
-//             };
-//           }
-//           
-          // Add extra credit field
-//           if (!chore.extra) {
-//             chore.extra = {
-//               enabled: false,
-//               points: 0
-//             };
-//           }
-//         });
-//       }
-//       
-//       saved.version = 5;
-//     }
-//     
-    // Merge with defaults for any new properties
-//     const merged = { ...stateDefault(), ...saved };
-//     
-    // Safety check: Ensure base is always $20 (fix for any incorrect setups)
-//     if (merged.config) {
-//       if (merged.config.base !== 20) {
-//         console.log(`Fixing incorrect base: ${merged.config.base} → 20`);
-//       }
-//       merged.config.base = 20;
-//       merged.config.pointValue = 0.20;
-//       merged.config.weekGoal = 100;
-//       merged.config.maxPay = Math.max(merged.config.maxPay || 30, 30); // At least $30
-//     }
-//     
-    // Ensure all kids have the new structure
-//     merged.kids.forEach(kid => {
-//       if (!kid.subjects) {
-//         kid.subjects = {
-//           Math: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
-//           English: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
-//           Science: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' },
-//           History: { current: kid.grade || 'B', baseline: kid.baselineGrade || kid.grade || 'B' }
-//         };
-//       }
-//       
-      // Ensure baselineGrade exists
-//       if (!kid.baselineGrade) {
-//         kid.baselineGrade = kid.grade || 'B';
-//       }
-//       
-      // Ensure gradeCalc exists
-//       if (!kid.gradeCalc) {
-//         kid.gradeCalc = {
-//           Math: { tests: [], quizzes: [], homework: [] },
-//           English: { tests: [], quizzes: [], homework: [] },
-//           Science: { tests: [], quizzes: [], homework: [] },
-//           History: { tests: [], quizzes: [], homework: [] }
-//         };
-//       }
-//     });
-    
-    return merged;
-//   } catch (e) {
-//     console.error('Load error:', e);
-//     return stateDefault();
-//   }
-}
 
-// SYNC POINT — replace localStorage with Supabase
+// SYNC POINT: save to localStorage and Supabase
 async function save() {
   try {
-    setSyncStatus('saving');
+    // Always save to localStorage first (fast, reliable)
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    await db.save(state);
     updateDataSize();
+    
+    // Sync to Supabase if online and available (fire-and-forget)
+    if (isOnline && supabase) {
+      syncToSupabase().catch(error => {
+        console.error('Supabase sync failed:', error);
+        // Don't break the UI - just log the error
+      });
+    }
   } catch (e) {
     console.error('Save error:', e);
   }
 }
 
-let state = load();
+// Sync to Supabase
+async function syncToSupabase() {
+  if (!isOnline || !supabase) return;
+  
+  try {
+    isSyncing = true;
+    updateSyncDot();
+    syncRetryCount = 0;
+    
+    const { error } = await supabase
+      .from('family_board')
+      .upsert({
+        id: 'family_board_data', // Single record ID
+        data: state,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id'
+      });
+    
+    if (error) {
+      throw error;
+    }
+    
+    console.log('Synced to Supabase');
+  } catch (error) {
+    console.error('Supabase sync error:', error);
+    
+    // Retry logic
+    if (syncRetryCount < MAX_SYNC_RETRIES) {
+      syncRetryCount++;
+      console.log(`Retrying sync (${syncRetryCount}/${MAX_SYNC_RETRIES})...`);
+      setTimeout(() => syncToSupabase(), 2000 * syncRetryCount); // Exponential backoff
+    }
+  } finally {
+    isSyncing = false;
+    updateSyncDot();
+  }
+}
+
+// Sync from Supabase (called on load)
+async function syncFromSupabase() {
+  if (!isOnline || !supabase) return;
+  
+  try {
+    isSyncing = true;
+    updateSyncDot();
+    
+    const { data, error } = await supabase
+      .from('family_board')
+      .select('data, updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(1)
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    if (data) {
+      const remoteData = data.data;
+      const localData = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+      
+      // Use the most recent data (compare timestamps)
+      if (!localData || (data.updated_at > (localData._timestamp || 0))) {
+        console.log('Using remote data from Supabase');
+        const migrated = applyMigrations(remoteData);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+        
+        // Reload the state if the app is already initialized
+        if (window.state) {
+          state = migrated;
+          render();
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('Supabase sync from error:', error);
+  } finally {
+    isSyncing = false;
+    updateSyncDot();
+  }
+}
+
+let state = null;
 let currentFilter = 'all';
 let pendingPinAction = null;
 
 // Initialize
 async function init() {
+  // Initialize Supabase
+  await initSupabase();
+  
+  // Load state (async, with Supabase sync)
   state = await load();
-  const isFirstTime = !state || state.kids?.[0]?.name === 'Kid 1';
+  
+  // Check if this is first-time setup (no saved data)
+  const raw = localStorage.getItem(STORAGE_KEY);
+  const isFirstTime = !raw;
   
   weekGuard();
   setupEventListeners();
@@ -455,6 +533,9 @@ async function init() {
     startClock();
     setupServiceWorker();
   }
+  
+  // Initial sync dot update
+  updateSyncDot();
 }
 
 // Show first-time setup modal
@@ -497,8 +578,8 @@ function handleSetupSubmit() {
   state.config.pointValue = state.config.base / weeklyPoints; // $0.20 per point ($20 ÷ 100)
   state.config.parentPin = parentPin || null; // Default PIN if empty (changed from '1234' to null)
   
-  // Save and close
-  save();
+  // Save and close (fire-and-forget)
+  save().catch(console.error);
   
   const modal = document.getElementById('setupModal');
   if (modal) modal.close();
@@ -543,7 +624,7 @@ function weekGuard() {
     });
     
     state.logs.unshift(`${new Date().toLocaleString()}: Auto-reset for new week (was ${oldWeek}) - baselines updated`);
-    save();
+    save().catch(console.error);
   }
 }
 
@@ -566,7 +647,7 @@ function autoApprove48h() {
     }
   });
   
-  if (changed) save();
+  if (changed) save().catch(console.error);
 }
 
 // Grade rank mapping
@@ -710,7 +791,7 @@ function addLog(msg, type = 'info') {
   state.logs.unshift(entry);
   // Keep last 100 logs
   state.logs = state.logs.slice(0, 100);
-  save();
+  save().catch(console.error);
 }
 
 // Confetti animation
@@ -1032,7 +1113,7 @@ function renderCalculator() {
   if (!kid.gradeHistory.includes(currentGrade)) {
     kid.gradeHistory.push(currentGrade);
     kid.gradeHistory = kid.gradeHistory.slice(-12); // Keep last 12
-    save();
+    save().catch(console.error);
   }
   
   // Populate "What do I need?" dropdowns
@@ -1368,7 +1449,7 @@ function setupEventListeners() {
         input.value = '';
         addLog(`Added ${score}% to ${subject} ${category} for ${kid.name}`);
         renderCalculator();
-        save();
+        save().catch(console.error);
       }
     }
   });
@@ -1429,7 +1510,7 @@ function setupEventListeners() {
     }
     
     addLog(`Display mode ${state.displayMode ? 'ON' : 'OFF'}`);
-    save();
+    save().catch(console.error);
   });
   
   // Settings modal
@@ -1471,7 +1552,7 @@ function setupEventListeners() {
     
     // Update or remove PIN
     state.config.parentPin = newPin || null; // Default if empty (changed from '1234' to null)
-    save();
+    save().catch(console.error);
     
     pinStatus.textContent = newPin ? 'PIN updated successfully' : 'PIN removed';
     pinStatus.style.color = 'var(--ok)';
@@ -1670,7 +1751,7 @@ async function exportData() {
     document.getElementById('blobArea').value = JSON.stringify(exportData, null, 2);
     state.lastExport = now();
     addLog('Exported encrypted data');
-    save();
+    save().catch(console.error);
     
   } catch (error) {
     console.error('Export error:', error);
@@ -1714,7 +1795,7 @@ async function importData() {
     
     // Merge with current config
     state = { ...state, ...importedState };
-    save();
+    save().catch(console.error);
     addLog(`Imported data from ${importData.t || 'unknown date'}`);
     render();
     
@@ -1731,7 +1812,7 @@ function clearData() {
   if (!confirm('Clear ALL data? This cannot be undone.')) return;
   
   state = stateDefault();
-  save();
+  save().catch(console.error);
   addLog('Cleared all data');
   render();
   alert('Data cleared');
@@ -1837,7 +1918,7 @@ function setupServiceWorker() {
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => init());
+  document.addEventListener('DOMContentLoaded', init);
 } else {
   init();
 }
