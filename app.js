@@ -444,12 +444,15 @@ let pendingPinAction = null;
 async function init() {
   state = await load();
   const isFirstTime = !state || state.kids?.[0]?.name === 'Kid 1';
+  console.log('First time check:', { hasState: !!state, kidName: state?.kids?.[0]?.name, isFirstTime });
   
   weekGuard();
   setupEventListeners();
   
   if (isFirstTime) {
-    showSetupModal();
+    console.log('Showing setup modal');
+    // Small delay to ensure DOM is ready
+    setTimeout(() => showSetupModal(), 100);
   } else {
     render();
     startClock();
@@ -787,7 +790,10 @@ function render() {
     document.getElementById(`${kidId}PayoutVal`).textContent = formatMoney(payoutValue);
     
     // Update progress bar (from $0 to $30)
-    const progressPercentage = (payoutValue / 30) * 100;
+    // Progress bar: $0=0%, $20=66.67%, $30=100%
+  const progressPercentage = payoutValue <= 20 
+    ? (payoutValue / 20) * 66.67 
+    : 66.67 + ((payoutValue - 20) / 10) * 33.33;
     const progressElement = document.getElementById(`${kidId}Progress`);
     if (progressElement) {
       progressElement.style.width = `${Math.max(0, Math.min(100, progressPercentage))}%`;
