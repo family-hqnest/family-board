@@ -3,6 +3,10 @@ const SUPABASE_URL = 'https://fjvhkiynqejnbdbfwyxx.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqdmhraXlucWVqbmJkYmZ3eXh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTQ2OTUsImV4cCI6MjA4OTA5MDY5NX0.Rk2APihye1Zut-k5Wmm7Kn3NmIWIvM74srtBM-8vjA4';
 const FAMILY_ID = 'family';
 const STORAGE_KEY = 'famboard-v6';
+const now = () => Date.now();
+const uid = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
+const formatMoney = (amount) => `$${Number(amount).toFixed(2)}`;
+const formatDate = (ts) => new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 
 // Supabase client DISABLED until table is fixed
 const db = {
@@ -338,6 +342,7 @@ let pendingPinAction = null;
 async function init() {
   try {
     state = await load();
+    if (!state) state = stateDefault();
     console.log('Loaded state:', state);
     
     // Ensure state is valid
@@ -346,7 +351,7 @@ async function init() {
       state = stateDefault();
     }
     
-    const isFirstTime = !state || state.kids?.[0]?.name === 'Kid 1';
+    const isFirstTime = state.kids?.[0]?.name === 'Kid 1' || state.kids?.[0]?.name === 'Kid 2';
     console.log('First time check:', { hasState: !!state, kidName: state?.kids?.[0]?.name, isFirstTime });
     
     weekGuard();
