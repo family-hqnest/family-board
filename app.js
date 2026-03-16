@@ -4,121 +4,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const FAMILY_ID = 'family';
 const STORAGE_KEY = 'famboard-v6';
 
-// Supabase client (lightweight fetch wrapper — no CDN needed)
+// Supabase client DISABLED until table is fixed
 const db = {
   async load() {
-    try {
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/board_state?id=eq.${FAMILY_ID}&select=data`,
-        { headers: { 'apikey': SUPABASE_KEY, 'Authorization': `Bearer ${SUPABASE_KEY}` } }
-      );
-      
-      if (!res.ok) {
-        console.warn(`Supabase load failed with status ${res.status}, using localStorage`);
-        return null;
-      }
-      
-      const rows = await res.json();
-      if (rows && rows.length > 0 && rows[0].data) {
-        console.log('✅ Loaded data from Supabase');
-        return rows[0].data;
-      }
-      
-      console.log('No data in Supabase yet');
-      return null;
-    } catch(e) {
-      console.warn('Supabase load failed, using localStorage', e);
-      return null;
-    }
+    console.log('Supabase disabled - using localStorage only');
+    return null; // Always return null to force localStorage fallback
   },
   async save(state) {
-    try {
-      // Try to upsert using PUT
-      const res = await fetch(
-        `${SUPABASE_URL}/rest/v1/board_state?id=eq.${FAMILY_ID}`,
-        {
-          method: 'PUT',
-          headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
-          },
-          body: JSON.stringify({ id: FAMILY_ID, data: state, updated_at: new Date().toISOString() })
-        }
-      );
-      
-      if (!res.ok) {
-        const errorText = await res.text();
-        console.warn(`Supabase PUT failed (${res.status}):`, errorText);
-        
-        // Try POST as fallback
-        const postRes = await fetch(
-          `${SUPABASE_URL}/rest/v1/board_state`,
-          {
-            method: 'POST',
-            headers: {
-              'apikey': SUPABASE_KEY,
-              'Authorization': `Bearer ${SUPABASE_KEY}`,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ id: FAMILY_ID, data: state, updated_at: new Date().toISOString() })
-          }
-        );
-        
-        if (!postRes.ok) {
-          const postError = await postRes.text();
-          console.warn(`Supabase POST also failed (${postRes.status}):`, postError);
-          throw new Error(`Supabase sync failed: ${postError}`);
-        }
-        
-        console.log('✅ Saved to Supabase via POST');
-      } else {
-        console.log('✅ Saved to Supabase via PUT');
-      }
-      
-      setSyncStatus('saved');
-    } catch(e) {
-      console.warn('Supabase save failed, data saved locally only', e);
-      setSyncStatus('error');
-      
-      // Show a user-friendly error in the console
-      if (e.message && e.message.includes('row-level security')) {
-        console.log(`
-⚠️  SUPABASE SETUP REQUIRED:
-The 'board_state' table has Row Level Security (RLS) enabled.
-You need to create a policy to allow anonymous access:
-
-1. Go to Supabase Dashboard → Table Editor → board_state → Policies
-2. Click "Create new policy"
-3. Choose "For full customization"
-4. Name: "Allow anonymous access"
-5. Using expression: "auth.role() = 'anon'"
-6. With check expression: "auth.role() = 'anon'"
-7. Save
-
-Or run this SQL in the SQL Editor:
-CREATE POLICY "Allow anonymous access" ON board_state
-  FOR ALL USING (auth.role() = 'anon');
-`);
-      } else if (e.message && e.message.includes("Could not find the 'data' column")) {
-        console.log(`
-⚠️  SUPABASE TABLE SETUP REQUIRED:
-The 'board_state' table might not have the right schema.
-Create the table with this SQL:
-
-CREATE TABLE board_state (
-  id TEXT PRIMARY KEY,
-  data JSONB NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-ALTER TABLE board_state ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow anonymous access" ON board_state
-  FOR ALL USING (auth.role() = 'anon');
-`);
-      }
-    }
+    console.log('Supabase disabled - data saved locally only');
+    setSyncStatus('offline');
+  console.log('Supabase sync offline - table needs fixing');
   }
 };
 
