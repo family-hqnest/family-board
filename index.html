@@ -1,341 +1,184 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
-  <meta name="theme-color" content="#0d0d14" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="FamBoard" />
-  <link rel="manifest" href="./manifest.json" />
-  <link rel="icon" type="image/png" sizes="192x192" href="./icons/icon-192.png" />
-  <link rel="stylesheet" href="./style.css" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0d14">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="FamBoard">
+  <link rel="manifest" href="./manifest.json">
+  <link rel="apple-touch-icon" href="./icons/icon-192.png">
+  <link rel="stylesheet" href="./style.css">
   <title>Family Achievement Board</title>
 </head>
 <body>
-  <div class="wrap" id="appRoot">
-    <header>
-      <h1>🏆 <span class="brand">Family Achievement Board</span></h1>
-      <span id="syncDot" class="sync-dot saving" title="Syncing...">●</span>
-      <div class="row">
-        <div class="clock" id="clock"></div>
-        <button id="displayToggle">Display Mode</button>
-        <button id="settingsBtn">Settings</button>
+<div class="wrap" id="appRoot">
+  <header>
+    <h1>🏆 <span class="brand">Family Achievement Board</span></h1>
+    <span id="syncDot" class="sync-dot saving" title="Syncing...">●</span>
+    <div class="row">
+      <div class="clock" id="clock"></div>
+      <button id="displayToggle">📺 Display</button>
+      <button id="settingsBtn">⚙️ Settings</button>
+    </div>
+  </header>
+  <section class="grid">
+    <article class="card kpi">
+      <h2>🏆 Family Total Payout</h2>
+      <div class="money" id="payoutVal">$0.00</div>
+      <div class="small muted">Combined payout for all kids</div>
+      <div class="row" style="margin-top:8px;gap:16px">
+        <span class="small">Approved <b id="approvedCount">0</b></span>
+        <span class="small">Pending <b id="pendingCount">0</b></span>
+        <span class="small">Rejected <b id="rejectedCount">0</b></span>
       </div>
-    </header>
-
-    <section class="grid">
-      <!-- Family Total Payout Card -->
-      <article class="card kpi">
-        <h2>🏆 Family Total Payout</h2>
-        <div class="money" id="payoutVal">$0.00</div>
-        <div class="small muted">Combined payout for all kids</div>
-        <div class="row">
-          <span class="small">Approved <b id="approvedCount">0</b></span>
-          <span class="small">Pending <b id="pendingCount">0</b></span>
-          <span class="small">Rejected <b id="rejectedCount">0</b></span>
-        </div>
-        <div class="small" id="payoutBreakdown"></div>
-      </article>
-
-      <!-- Kid 1 Payout Card -->
-      <article class="card kid-payout kid1-payout">
-        <h2 style="color: #ff4757">👧 <span id="kid1Name">Kid 1</span>'s Payout</h2>
-        <div class="money kid-money" id="kid1PayoutVal" style="color: #ff4757">$0.00</div>
-        <div class="small muted">Formula: $20 base + chore bonus + grade bonus + extra credit - penalties</div>
-        
-        <!-- Progress Bar -->
-        <div class="progress-container">
-          <div class="progress-labels">
-            <span class="small">$0</span>
-            <span class="small">$20</span>
-            <span class="small">$30</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill" id="kid1Progress" style="background: linear-gradient(90deg, #ff4757, #ff6b81);"></div>
-          </div>
-        </div>
-        
-        <div class="row" style="margin-top: 12px;">
-          <div class="kid-stats">
-            <div class="small"><b id="kid1ApprovedPts">0</b>/<span id="kid1WeekGoal">50</span> points</div>
-            <div class="small muted" id="kid1PendingCount">0 pending</div>
-          </div>
-          <div class="kid-stats">
-            <div class="small" id="kid1ChoreRatio">0% chores</div>
-            <div class="small" id="kid1GradeRatio">0% growth</div>
-          </div>
-        </div>
-        
-        <div class="small" id="kid1Breakdown" style="margin-top: 8px;"></div>
-      </article>
-
-      <!-- Kid 2 Payout Card -->
-      <article class="card kid-payout kid2-payout">
-        <h2 style="color: #00d2d3">👩 <span id="kid2Name">Kid 2</span>'s Payout</h2>
-        <div class="money kid-money" id="kid2PayoutVal" style="color: #00d2d3">$0.00</div>
-        <div class="small muted">Formula: $20 base + chore bonus + grade bonus + extra credit - penalties</div>
-        
-        <!-- Progress Bar -->
-        <div class="progress-container">
-          <div class="progress-labels">
-            <span class="small">$0</span>
-            <span class="small">$20</span>
-            <span class="small">$30</span>
-          </div>
-          <div class="progress-bar">
-            <div class="progress-fill" id="kid2Progress" style="background: linear-gradient(90deg, #00d2d3, #2be9ff);"></div>
-          </div>
-        </div>
-        
-        <div class="row" style="margin-top: 12px;">
-          <div class="kid-stats">
-            <div class="small"><b id="kid2ApprovedPts">0</b>/<span id="kid2WeekGoal">50</span> points</div>
-            <div class="small muted" id="kid2PendingCount">0 pending</div>
-          </div>
-          <div class="kid-stats">
-            <div class="small" id="kid2ChoreRatio">0% chores</div>
-            <div class="small" id="kid2GradeRatio">0% growth</div>
-          </div>
-        </div>
-        
-        <div class="small" id="kid2Breakdown" style="margin-top: 8px;"></div>
-      </article>
-
-      <!-- Chores Card -->
-      <article class="card chores">
-        <h2>Chores</h2>
-        <div class="row interactive">
-          <input id="choreName" placeholder="Add chore (e.g., Clean room)" />
-          <input id="chorePts" type="number" min="1" max="100" value="10" style="width:90px" placeholder="Points" />
-          <select id="choreFrequency" style="width:120px">
-            <option value="weekly">Weekly</option>
-            <option value="twice-weekly">Twice weekly</option>
-            <option value="daily">Daily</option>
-          </select>
-          <select id="choreKid">
-            <option value="kid1">Kid 1</option>
-            <option value="kid2">Kid 2</option>
-            <option value="shared">Shared</option>
-          </select>
-          <button id="addChore">Add</button>
-        </div>
-        <div class="row small muted" style="margin-top:8px">
-          <span>Filter:</span>
-          <button data-filter="all" class="active">All</button>
-          <button data-filter="pending">Pending</button>
-          <button data-filter="approved">Approved</button>
-          <button data-filter="kid1">Kid 1</button>
-          <button data-filter="kid2">Kid 2</button>
-        </div>
-        <div id="choreList" style="margin-top:12px"></div>
-      </article>
-
-      <!-- Controls Card -->
-      <article class="card controls interactive">
-        <h2>Week Control</h2>
-        <div class="small">Week Key: <span id="weekKey"></span></div>
-        <div class="small muted" id="weekProgress"></div>
-        <button id="newWeekBtn" style="margin-top:8px">Start New Week</button>
-        <button id="openGradeBtn" style="margin-top:8px">Grade Modal</button>
-        <button id="openCalcBtn" style="margin-top:8px">Calculator</button>
-        <div style="margin-top:12px;padding-top:12px;border-top:1px solid #2d3046">
-          <div class="small">PIN Gate:</div>
-          <input id="pinInput" type="password" placeholder="0000" maxlength="4" style="width:80px;text-align:center" />
-          <button id="pinBtn" class="small">Unlock</button>
-        </div>
-      </article>
-
-      <!-- Grades Card -->
-      <article class="card grades">
-        <h2>Grades</h2>
-        <div id="gradeSummary"></div>
-        <div class="row" style="margin-top:12px">
-          <button class="interactive" id="calcBtn">Kid1 Calculator</button>
-          <button class="interactive" id="sparklineBtn">Toggle Sparkline</button>
-        </div>
-        <svg id="miniSpark" style="width:100%;height:60px;margin-top:12px;display:none"></svg>
-      </article>
-
-      <!-- Activity Log Card -->
-      <article class="card log">
-        <h2>Activity Log</h2>
-        <div id="activity"></div>
-        <div class="row" style="margin-top:12px">
-          <button class="small" id="clearLogBtn">Clear Old Logs</button>
-          <button class="small" id="exportLogBtn">Export Logs</button>
-        </div>
-      </article>
-    </section>
+    </article>
+    <article class="card kid-payout" style="border-color:rgba(255,71,87,0.3)">
+      <h2 style="color:#ff4757">🧒 <span id="kid1Name">Sofia</span>'s Payout</h2>
+      <div class="money" id="kid1PayoutVal" style="color:#ff4757">$20.00</div>
+      <div class="small muted">Base $20 — earn up to $30</div>
+      <div class="progress-container">
+        <div class="progress-labels row"><span class="small">$0</span><span class="small">$20</span><span class="small">$30</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="kid1Progress" style="background:linear-gradient(90deg,#ff4757,#ffa502);width:0%"></div></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div><div class="small" id="kid1ChoreRatio">0/0 chores done</div><div class="small muted" id="kid1PendingCount">0 pending</div></div>
+        <div><div class="small" id="kid1GradeRatio">0% grade growth</div></div>
+      </div>
+      <div class="small" id="kid1Level" style="margin-top:6px;color:#ffa502"></div>
+      <div id="kid1Breakdown" style="margin-top:8px"></div>
+    </article>
+    <article class="card kid-payout" style="border-color:rgba(0,210,211,0.3)">
+      <h2 style="color:#00d2d3">👩 <span id="kid2Name">Juliana</span>'s Payout</h2>
+      <div class="money" id="kid2PayoutVal" style="color:#00d2d3">$20.00</div>
+      <div class="small muted">Base $20 — earn up to $30</div>
+      <div class="progress-container">
+        <div class="progress-labels row"><span class="small">$0</span><span class="small">$20</span><span class="small">$30</span></div>
+        <div class="progress-bar"><div class="progress-fill" id="kid2Progress" style="background:linear-gradient(90deg,#00d2d3,#2be9ff);width:0%"></div></div>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <div><div class="small" id="kid2ChoreRatio">0/0 chores done</div><div class="small muted" id="kid2PendingCount">0 pending</div></div>
+        <div><div class="small" id="kid2GradeRatio">0% grade growth</div></div>
+      </div>
+      <div class="small" id="kid2Level" style="margin-top:6px;color:#00d2d3"></div>
+      <div id="kid2Breakdown" style="margin-top:8px"></div>
+    </article>
+    <article class="card">
+      <h2>📋 Chores</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <input id="choreName" placeholder="Chore name..." style="flex:2;min-width:140px">
+        <select id="choreFrequency" style="width:150px">
+          <option value="weekly">📆 Weekly</option>
+          <option value="twice-weekly">📅 2x per week</option>
+          <option value="daily">📅 Daily (7 entries)</option>
+        </select>
+        <select id="choreKid" style="width:120px">
+          <option value="kid1">🧒 Sofia</option>
+          <option value="kid2">👩 Juliana</option>
+          <option value="shared">👨‍👩‍👧 Shared</option>
+        </select>
+        <button id="addChore">+ Add</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem">
+          <input type="checkbox" id="choreRecurring"> 🔁 Recurring
+        </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem">
+          <input type="checkbox" id="choreExtra"> ⭐ Extra credit
+        </label>
+      </div>
+      <div id="bonusDollarsRow" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center">
+        <label class="small">Bonus ($):</label>
+        <input id="choreBonusDollars" type="number" min="0.50" max="5" step="0.50" value="1" style="width:80px">
+        <span class="small muted">(max $5 extra per week)</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
+        <input id="choreDod" placeholder="Done when... (e.g. floor clear, bed made)" style="flex:1">
+      </div>
+      <div class="row small muted" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <span>Filter:</span>
+        <button data-filter="all" class="active">All</button>
+        <button data-filter="pending">Pending</button>
+        <button data-filter="approved">Approved</button>
+        <button data-filter="kid1">Sofia</button>
+        <button data-filter="kid2">Juliana</button>
+      </div>
+      <div id="choreList"></div>
+    </article>
+    <article class="card">
+      <h2>📅 Week Control</h2>
+      <div class="small">Week: <span id="weekKey">-</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
+        <button id="newWeekBtn">🔄 New Week</button>
+        <button id="openGradeBtn">📚 Update Grades</button>
+      </div>
+    </article>
+    <article class="card">
+      <h2>📚 Grades</h2>
+      <div id="gradeSummary"></div>
+    </article>
+    <article class="card">
+      <h2>📋 Activity Log</h2>
+      <div id="activity"></div>
+      <div style="display:flex;gap:8px;margin-top:10px">
+        <button class="small" id="clearLogBtn">Clear Logs</button>
+        <button class="small" id="exportLogBtn">Export Logs</button>
+      </div>
+    </article>
+  </section>
+</div>
+<dialog id="gradeModal">
+  <h3>📚 Update Grades</h3>
+  <p class="small muted">Growth vs your own baseline drives the payout bonus.</p>
+  <div id="gradeRows"></div>
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+    <button id="gradeCancel">Cancel</button>
+    <button id="gradeSave">Save Grades</button>
   </div>
-
-  <!-- Grade Modal -->
-  <dialog id="gradeModal">
-    <h3>Set Weekly Grades</h3>
-    <div id="gradeRows"></div>
-    <div class="row" style="justify-content:flex-end;margin-top:16px">
-      <button id="gradeCancel">Cancel</button>
-      <button id="gradeSave">Save Grades</button>
-    </div>
-  </dialog>
-
-  <!-- Settings Modal -->
-  <dialog id="settingsModal">
-    <h3>Settings & Data</h3>
-    
-    <div class="setup-section" style="margin-bottom: 16px;">
-      <h4>Parent PIN Management</h4>
-      <div class="row">
-        <label style="flex:1">
-          Current PIN
-          <input id="currentPin" type="password" placeholder="Current PIN" style="width:100%" maxlength="4" />
-        </label>
-        <label style="flex:1">
-          New PIN (leave empty to remove)
-          <input id="newPin" type="password" placeholder="New PIN (4 digits)" style="width:100%" maxlength="4" />
-        </label>
-      </div>
-      <div class="row" style="justify-content:flex-end;margin-top:8px">
-        <button id="updatePinBtn" class="small">Update PIN</button>
-      </div>
-      <div class="small muted" id="pinStatus" style="margin-top:8px"></div>
-    </div>
-    
-    <div class="row" style="margin:8px 0">
-      <label style="flex:1">
-        Passphrase
-        <input id="passphrase" type="password" placeholder="Required for export/import" style="width:100%" />
-      </label>
-    </div>
-    <div class="row" style="margin:12px 0;gap:8px">
-      <button id="exportBtn">Export Encrypted</button>
-      <button id="importBtn">Import Encrypted</button>
-      <button id="clearBtn">Clear Data</button>
-      <button id="resetAppBtn" style="background:var(--danger);color:white">Reset App</button>
-    </div>
-    <textarea id="blobArea" placeholder="Encrypted payload appears here..."></textarea>
-    <div class="row" style="margin-top:12px">
-      <div class="small muted" style="flex:1">Data size: <span id="dataSize">0 KB</span></div>
-      <button id="settingsClose">Close</button>
-    </div>
-  </dialog>
-
-  <!-- Calculator Drawer -->
-  <aside class="drawer" id="calcDrawer">
-    <div class="row" style="justify-content:space-between;align-items:center">
-      <h3>Grade Calculator</h3>
-      <button id="closeCalcBtn">×</button>
-    </div>
-    
-    <div class="row" style="margin-bottom:16px;gap:8px">
-      <select id="calcKidSelect" style="flex:1">
-        <option value="kid1">Kid 1</option>
-        <option value="kid2">Kid 2</option>
-      </select>
-      <select id="calcSubjectSelect" style="flex:1">
-        <option value="Math">Math</option>
-        <option value="English">English</option>
-        <option value="Science">Science</option>
-        <option value="History">History</option>
-      </select>
-    </div>
-    
-    <div id="calcRows"></div>
-    
-    <div class="row" style="margin-top:16px;justify-content:space-between">
-      <div>
-        <div class="small muted">Current Weighted Grade:</div>
-        <div style="font-size:1.5rem;font-weight:bold;color:var(--cyan)" id="weightedOut">0%</div>
-      </div>
-      <div>
-        <div class="small muted">Letter Grade:</div>
-        <div style="font-size:1.5rem;font-weight:bold" id="letterGrade">-</div>
-      </div>
-    </div>
-    
-    <div class="card" style="margin-top:16px;background:rgba(0,0,0,0.2)">
-      <h4 style="margin-bottom:12px">What do I need?</h4>
-      <div class="row" style="margin-bottom:12px;gap:8px">
-        <select id="targetGradeSelect" style="flex:1">
-          <option value="90">A (90%)</option>
-          <option value="80">B (80%)</option>
-          <option value="70">C (70%)</option>
-          <option value="60">D (60%)</option>
-        </select>
-        <select id="targetCategorySelect" style="flex:1">
-          <option value="tests">Tests</option>
-          <option value="quizzes">Quizzes</option>
-          <option value="homework">Homework</option>
-        </select>
-      </div>
-      <div id="whatDoINeedResult" class="small" style="color:var(--cyan);min-height:20px">
-        Select target grade and category
-      </div>
-    </div>
-    
-    <svg id="spark" class="spark" viewBox="0 0 340 110" style="margin-top:16px"></svg>
-  </aside>
-
-  <!-- PIN Gate Modal -->
-  <dialog id="pinModal">
-    <h3>Parent PIN Required</h3>
-    <p class="small muted">Enter parent PIN to approve/reject chores</p>
-    <input id="parentPin" type="password" maxlength="4" style="width:120px;font-size:1.5rem;text-align:center;letter-spacing:8px" />
-    <div class="row" style="justify-content:flex-end;margin-top:16px">
-      <button id="pinCancel">Cancel</button>
-      <button id="pinSubmit">Submit</button>
-    </div>
-  </dialog>
-
-  <!-- First-Time Setup Modal -->
-  <dialog id="setupModal">
-    <h3>🏆 Welcome to Family Achievement Board!</h3>
-    <p class="small muted">Let's set up your family's achievement system.</p>
-    
-    <div class="setup-form">
-      <div class="setup-section">
-        <h4>Kid 1</h4>
-        <div class="row">
-          <input id="setupKid1Name" placeholder="Name (e.g., Sofi)" style="flex:1" />
-          <input id="setupKid1Emoji" placeholder="Emoji (e.g., 👧)" style="width:80px;text-align:center" maxlength="2" />
-        </div>
-      </div>
-      
-      <div class="setup-section">
-        <h4>Kid 2</h4>
-        <div class="row">
-          <input id="setupKid2Name" placeholder="Name (e.g., Juli)" style="flex:1" />
-          <input id="setupKid2Emoji" placeholder="Emoji (e.g., 👩)" style="width:80px;text-align:center" maxlength="2" />
-        </div>
-      </div>
-      
-      <div class="setup-section">
-        <h4>Weekly Goals</h4>
-        <div class="row">
-          <label style="flex:1">
-            Weekly Goal Points
-            <input id="setupWeeklyPoints" type="number" min="10" max="100" value="50" style="width:100%" />
-          </label>
-          <label style="flex:1">
-            Max Payout ($)
-            <input id="setupMaxPayout" type="number" min="10" max="100" value="50" style="width:100%" />
-          </label>
-        </div>
-      </div>
-      
-      <div class="setup-section">
-        <h4>Parent PIN (Optional)</h4>
-        <p class="small muted">Leave empty for no PIN protection</p>
-        <input id="setupParentPin" type="password" maxlength="4" placeholder="0000" style="width:120px;font-size:1.2rem;text-align:center;letter-spacing:6px" />
-      </div>
-    </div>
-    
-    <div class="row" style="justify-content:flex-end;margin-top:24px;gap:8px">
-      <button id="setupCancel" class="secondary">Skip & Use Defaults</button>
-      <button id="setupSave">Save & Start</button>
-    </div>
-  </dialog>
-
-  <script src="./app.js"></script>
+</dialog>
+<dialog id="settingsModal">
+  <h3>⚙️ Settings</h3>
+  <h4 style="margin:16px 0 8px">Names & Config</h4>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+    <div><label class="small">Kid 1 Name</label><input id="cfgName0" placeholder="Sofia" style="width:100%"></div>
+    <div><label class="small">Kid 1 Emoji</label><input id="cfgEmoji0" placeholder="🧒" style="width:100%"></div>
+    <div><label class="small">Kid 2 Name</label><input id="cfgName1" placeholder="Juliana" style="width:100%"></div>
+    <div><label class="small">Kid 2 Emoji</label><input id="cfgEmoji1" placeholder="👩" style="width:100%"></div>
+    <div><label class="small">Base Pay ($)</label><input id="cfgBase" type="number" value="20" style="width:100%"></div>
+    <div><label class="small">Max Pay ($)</label><input id="cfgMax" type="number" value="30" style="width:100%"></div>
+  </div>
+  <button id="saveSettingsConfig">Save Settings</button>
+  <h4 style="margin:16px 0 8px">Parent PIN</h4>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <input id="currentPin" type="password" placeholder="Current PIN" maxlength="4" style="width:130px">
+    <input id="newPin" type="password" placeholder="New PIN (4 digits)" maxlength="4" style="width:150px">
+    <button id="updatePinBtn">Update PIN</button>
+  </div>
+  <div class="small muted" id="pinStatus" style="margin-top:6px"></div>
+  <h4 style="margin:16px 0 8px">Backup & Restore</h4>
+  <input id="passphrase" type="password" placeholder="Passphrase for encryption" style="width:100%;margin-bottom:8px">
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+    <button id="exportBtn">Export Encrypted</button>
+    <button id="importBtn">Import Encrypted</button>
+    <button id="clearBtn" style="color:#ff4757">Clear All Data</button>
+  </div>
+  <textarea id="blobArea" placeholder="Encrypted data appears here..." style="width:100%;height:80px;font-size:.75rem"></textarea>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
+    <span class="small muted">Size: <span id="dataSize">-</span></span>
+    <button id="settingsClose">Close</button>
+  </div>
+</dialog>
+<dialog id="pinModal">
+  <h3>🔐 Parent PIN Required</h3>
+  <p class="small muted">Enter your PIN to approve or reject.</p>
+  <input id="parentPin" type="password" maxlength="4" placeholder="0000" style="width:120px;font-size:1.5rem;text-align:center;letter-spacing:8px;margin:12px 0;display:block">
+  <div style="display:flex;justify-content:flex-end;gap:8px">
+    <button id="pinCancel">Cancel</button>
+    <button id="pinSubmit">Submit</button>
+  </div>
+</dialog>
+<script src="./app.js"></script>
 </body>
 </html>
