@@ -84,8 +84,8 @@ h1 {
 
 /* Grid system */
 .grid {
-  display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-top: 12px;
 }
