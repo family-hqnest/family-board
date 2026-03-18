@@ -1,1559 +1,457 @@
-// ── SUPABASE CONFIG ──────────────────────────────────────
+// ── CONFIG ────────────────────────────────────────────────
 const SUPABASE_URL = 'https://fjvhkiynqejnbdbfwyxx.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZqdmhraXlucWVqbmJkYmZ3eXh4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTQ2OTUsImV4cCI6MjA4OTA5MDY5NX0.Rk2APihye1Zut-k5Wmm7Kn3NmIWIvM74srtBM-8vjA4';
-const FAMILY_ID = 'family';
-const STORAGE_KEY = 'famboard-v6';
-const now = () => Date.now();
-const uid = () => crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2);
-const formatMoney = (amount) => `$${Number(amount).toFixed(2)}`;
-const formatDate = (ts) => new Date(ts).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
+const FAMILY_ID   = 'family';
+const STORAGE_KEY = 'famboard-v1';
 
-// Supabase client DISABLED until table is fixed
-const db = {
-  async load() {
-    console.log('Supabase disabled - using localStorage only');
-    return null; // Always return null to force localStorage fallback
-  },
-  async save(state) {
-    console.log('Supabase disabled - data saved locally only');
-    setSyncStatus('offline');
-  console.log('Supabase sync offline - table needs fixing');
-  }
-};
+const now       = () => Date.now();
+const uid       = () => Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+const money     = (n) => '$' + Number(n).toFixed(2);
+const gradeRank = { A: 4, B: 3, C: 2, D: 1, F: 0 };
+const SUBJECTS  = ['Math', 'English', 'Science', 'History'];
+const LEVELS    = ['Rookie', 'Rising Star', 'Champion', 'Legend', 'Superstar'];
+const DAYS      = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-function setSyncStatus(status) {
-  const dot = document.getElementById('syncDot');
-  if (!dot) return;
-  dot.className = 'sync-dot ' + status;
-  dot.title = status === 'saved' ? 'Synced' : status === 'saving' ? 'Saving...' : 'Sync error';
-}
-// ─────────────────────────────────────────────────────────
-
-const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
-const PARENT_PIN = null;
-const AUTO_APPROVE_HOURS = 48;
-const stateDefault = () => ({
-  version: 5, // New version for updated scoring system with frequency chores
-  weekStart: getWeekStart(),
-  config: {
-    base: 20, // Starting payout per kid per week
-    pointValue: 0.20, // $0.20 per point ($20 ÷ 100 points)
-    maxPay: 30, // Maximum payout amount
-    weekGoal: 100, // Weekly goal for approved points (increased from 50)
-    parentPin: PARENT_PIN,
-    autoApproveHours: AUTO_APPROVE_HOURS,
-    gradeBonusPerSubject: 2.50 // $2.50 per improved subject
-  },
-  kids: [
-    {
-      id: 'kid1',
-      name: 'Kid 1',
-      emoji: '👧',
-      grade: 'B',
-      baselineGrade: 'B', // Store baseline for growth comparison
-      subjects: {
-        Math: { current: 'B', baseline: 'B' },
-        English: { current: 'B', baseline: 'B' },
-        Science: { current: 'B', baseline: 'B' },
-        History: { current: 'B', baseline: 'B' }
-      },
-      gradeCalc: {
-        Math: { tests: [], quizzes: [], homework: [] },
-        English: { tests: [], quizzes: [], homework: [] },
-        Science: { tests: [], quizzes: [], homework: [] },
-        History: { tests: [], quizzes: [], homework: [] }
-      },
-      gradeHistory: []
-    },
-    {
-      id: 'kid2',
-      name: 'Kid 2',
-      emoji: '👩',
-      grade: 'B',
-      baselineGrade: 'B', // Store baseline for growth comparison
-      subjects: {
-        Math: { current: 'B', baseline: 'B' },
-        English: { current: 'B', baseline: 'B' },
-        Science: { current: 'B', baseline: 'B' },
-        History: { current: 'B', baseline: 'B' }
-      },
-      gradeCalc: {
-        Math: { tests: [], quizzes: [], homework: [] },
-        English: { tests: [], quizzes: [], homework: [] },
-        Science: { tests: [], quizzes: [], homework: [] },
-        History: { tests: [], quizzes: [], homework: [] }
-      },
-      gradeHistory: []
-    }
-  ],
-  chores: [],
-  logs: [],
-  lastExport: null,
-  displayMode: false
-});
-
-function getWeekStart(ts = now()) {
-  const d = new Date(ts);
-  const day = (d.getDay() + 6) % 7; // Monday as week start
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() - day);
-  return d.getTime();
-}
-
-// SYNC POINT — replace localStorage with Supabase
-async function load() {
-  setSyncStatus('saving');
-  const remote = await db.load();
-  if (remote) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
-    setSyncStatus('saved');
-    return remote;
-  }
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return stateDefault();
-    return JSON.parse(raw);
-  } catch(e) {
-    return stateDefault();
-}
-
-// SYNC POINT — replace localStorage with Supabase
-async function save() {
-  try {
-    setSyncStatus('saving');
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    await db.save(state);
-    updateDataSize();
-  } catch (e) {
-    console.error('Save error:', e);
-  }
-}
-
-let state;
-let currentFilter = 'all';
-let pendingPinAction = null;
-
-// Initialize
-async function init() {
-  try {
-    state = await load();
-    if (!state) state = stateDefault();
-    console.log('Loaded state:', state);
-    
-    // Ensure state is valid
-    if (!state || !state.kids || !Array.isArray(state.kids)) {
-      console.warn('Invalid state, using default');
-      state = stateDefault();
-    }
-    
-    const isFirstTime = state.kids?.[0]?.name === 'Kid 1' || state.kids?.[0]?.name === 'Kid 2';
-    console.log('First time check:', { hasState: !!state, kidName: state?.kids?.[0]?.name, isFirstTime });
-    
-    weekGuard();
-    setupEventListeners();
-    
-    if (isFirstTime) {
-      console.log('Showing setup modal');
-      // Small delay to ensure DOM is ready
-      setTimeout(() => showSetupModal(), 100);
-    } else {
-      render();
-      startClock();
-      setupServiceWorker();
-    }
-  } catch (error) {
-    console.error('Init failed:', error);
-    // Fallback to default state and show setup modal
-    state = stateDefault();
-    setTimeout(() => showSetupModal(), 100);
-  }
-}
-
-// Show first-time setup modal
-function showSetupModal() {
-  const modal = document.getElementById('setupModal');
-  if (!modal) return;
-  
-  // Set default values
-  document.getElementById('setupKid1Name').value = 'Kid 1';
-  document.getElementById('setupKid1Emoji').value = '👧';
-  document.getElementById('setupKid2Name').value = 'Kid 2';
-  document.getElementById('setupKid2Emoji').value = '👩';
-  document.getElementById('setupWeeklyPoints').value = 100;
-  document.getElementById('setupMaxPayout').value = 30;
-  document.getElementById('setupParentPin').value = '';
-  
-  modal.showModal();
-}
-
-// Handle setup form submission
-function handleSetupSubmit() {
-  const kid1Name = document.getElementById('setupKid1Name').value.trim() || 'Kid 1';
-  const kid1Emoji = document.getElementById('setupKid1Emoji').value.trim() || '👧';
-  const kid2Name = document.getElementById('setupKid2Name').value.trim() || 'Kid 2';
-  const kid2Emoji = document.getElementById('setupKid2Emoji').value.trim() || '👩';
-  const weeklyPoints = parseInt(document.getElementById('setupWeeklyPoints').value) || 100;
-  const maxPayout = parseInt(document.getElementById('setupMaxPayout').value) || 30;
-  const parentPin = document.getElementById('setupParentPin').value.trim();
-  
-  // Update state with user settings
-  state.kids[0].name = kid1Name;
-  state.kids[0].emoji = kid1Emoji;
-  state.kids[1].name = kid2Name;
-  state.kids[1].emoji = kid2Emoji;
-  
-  // Update config
-  state.config.base = 20; // Fixed base payout of $20
-  state.config.maxPay = maxPayout; // Maximum payout (e.g., $30)
-  state.config.weekGoal = weeklyPoints; // Weekly goal (e.g., 100 points)
-  state.config.pointValue = state.config.base / weeklyPoints; // $0.20 per point ($20 ÷ 100)
-  state.config.parentPin = parentPin || null; // Default PIN if empty (changed from '1234' to null)
-  
-  // Save and close
-  save();
-  
-  const modal = document.getElementById('setupModal');
-  if (modal) modal.close();
-  
-  // Start the app
-  render();
-  startClock();
-  setupServiceWorker();
-  
-  // Add log entry
-  addLog(`First-time setup completed: ${kid1Name} ${kid1Emoji} & ${kid2Name} ${kid2Emoji}`);
-}
-
-// Handle setup skip
-function handleSetupSkip() {
-  const modal = document.getElementById('setupModal');
-  if (modal) modal.close();
-  
-  // Use defaults
-  render();
-  startClock();
-  setupServiceWorker();
-  
-  addLog('First-time setup skipped, using defaults');
-}
-
-// Week guard - auto-reset on new week
-function weekGuard() {
-  const current = getWeekStart();
-  if (state.weekStart !== current) {
-    const oldWeek = formatDate(state.weekStart);
-    state.weekStart = current;
-    state.chores = state.chores.filter(c => c.recurring);
-    
-    // Auto-update baselines: set baseline = current for all subjects
-    state.kids.forEach(kid => {
-      Object.keys(kid.subjects).forEach(subject => {
-        kid.subjects[subject].baseline = kid.subjects[subject].current;
-      });
-      // Also update baseline grade
-      kid.baselineGrade = kid.grade;
-    });
-    
-    state.logs.unshift(`${new Date().toLocaleString()}: Auto-reset for new week (was ${oldWeek}) - baselines updated`);
-    save();
-  }
-}
-
-// Auto-approve chores after 48 hours
-function autoApprove48h() {
-  const cut = now() - (state.config.autoApproveHours * 60 * 60 * 1000);
-  let changed = false;
-  
-  state.chores.forEach(c => {
-    if (c.status === 'pending' && c.completedAt && c.completedAt <= cut) {
-      c.status = 'approved';
-      c.autoApproved = true;
-      
-      // No extra credit for auto-approve
-      c.extra = { enabled: false, points: 0 };
-      
-      changed = true;
-      confetti();
-      state.logs.unshift(`${new Date().toLocaleString()}: Auto-approved "${c.name}" after ${state.config.autoApproveHours}h`);
-    }
-  });
-  
-  if (changed) save();
-}
-
-// Grade rank mapping
-const gradeRank = {
-  'A': 4, 'B': 3, 'C': 2, 'D': 1, 'F': 0
-};
-
-// Calculate grade improvement bonus for a kid
-function calculateGradeBonus(kid) {
-  let totalBonus = 0;
-  
-  // Calculate for each subject
-  for (const [subject, data] of Object.entries(kid.subjects)) {
-    const baseRank = gradeRank[data.baseline] || 0;
-    const currentRank = gradeRank[data.current] || 0;
-    const improvement = currentRank - baseRank;
-    
-    // Only positive changes count: $2.50 per improved subject
-    if (improvement > 0) {
-      totalBonus += state.config.gradeBonusPerSubject; // $2.50 per improved subject
-    }
-    // No penalty for same or lower grades
-  }
-  
-  return totalBonus;
-}
-
-// Helper function to calculate points for a chore (handles frequency)
-function calculateChorePoints(chore) {
-  if (!chore.instances || chore.instances.total === 0) {
-    return chore.points || 0;
-  }
-  
-  // For frequency chores: points are divided among instances
-  const pointsPerInstance = chore.points / chore.instances.total;
-  
-  if (chore.status === 'approved') {
-    // For approved: count completed instances
-    return pointsPerInstance * chore.instances.completed;
-  } else if (chore.status === 'rejected') {
-    // For rejected: count rejected instances (total - completed)
-    const rejectedInstances = chore.instances.total - chore.instances.completed;
-    return pointsPerInstance * rejectedInstances;
-  }
-  
-  return 0;
-}
-
-// Payout calculation with new system
-function calculatePayout() {
-  // Calculate per-kid payouts
-  const kidPayouts = state.kids.map(kid => {
-    // Start with base $20
-    let payout = state.config.base;
-    
-    // Calculate approved points for this kid (from chores)
-    let kidApprovedPoints = 0;
-    let kidRejectedPoints = 0;
-    let kidExtraBonus = 0;
-    
-    state.chores.forEach(chore => {
-      if (chore.kid === kid.id || chore.kid === 'shared') {
-        if (chore.status === 'approved') {
-          kidApprovedPoints += calculateChorePoints(chore);
-          
-          // Add extra credit bonus if enabled
-          if (chore.extra && chore.extra.enabled) {
-            kidExtraBonus += chore.extra.points * state.config.pointValue;
-          }
-        } else if (chore.status === 'rejected') {
-          kidRejectedPoints += calculateChorePoints(chore);
-        }
-      }
-    });
-    
-    // Calculate approved ratio (capped at 1)
-    const approvedRatio = Math.min(kidApprovedPoints / state.config.weekGoal, 1);
-    
-    // Calculate grade bonus
-    const gradeBonus = calculateGradeBonus(kid);
-    
-    // Calculate potential bonus from chores and grades
-    // Max bonus potential = $10 ($30 ceiling - $20 base)
-    const maxBonus = state.config.maxPay - state.config.base;
-    
-    // Chore bonus based on approved ratio
-    const choreBonus = approvedRatio * maxBonus;
-    
-    // Add bonuses
-    payout += choreBonus + gradeBonus + kidExtraBonus;
-    
-    // Apply penalty for rejected points
-    const penalty = kidRejectedPoints * state.config.pointValue;
-    payout -= penalty;
-    
-    // Apply floor of $0
-    payout = Math.max(0, payout);
-    
-    // Apply ceiling of $30
-    payout = Math.min(state.config.maxPay, payout);
-    
-    return {
-      id: kid.id,
-      name: kid.name,
-      emoji: kid.emoji,
-      approvedPoints: kidApprovedPoints,
-      rejectedPoints: kidRejectedPoints,
-      approvedRatio: approvedRatio,
-      gradeBonus: gradeBonus,
-      extraBonus: kidExtraBonus,
-      penalty: penalty,
-      payout: payout
-    };
-  });
-  
-  // Calculate totals for display
-  const totalApproved = kidPayouts.reduce((sum, kid) => sum + kid.approvedPoints, 0);
-  const totalRejected = kidPayouts.reduce((sum, kid) => sum + kid.rejectedPoints, 0);
-  const totalPayout = kidPayouts.reduce((sum, kid) => sum + kid.payout, 0);
-  const approvedRatio = Math.min(totalApproved / state.config.weekGoal, 1);
-  
+function defaultState() {
   return {
-    total: totalPayout,
-    approved: totalApproved,
-    rejected: totalRejected,
-    pending: state.chores.filter(c => c.status === 'pending').length,
-    approvedRatio: approvedRatio,
-    base: state.config.base,
-    pointValue: state.config.pointValue,
-    maxPay: state.config.maxPay,
-    weekGoal: state.config.weekGoal,
-    gradeBonusPerSubject: state.config.gradeBonusPerSubject,
-    kidPayouts
+    names:  ['Sofia', 'Juliana'],
+    emojis: ['🧒', '👩'],
+    maxPay: 30,
+    base:   20,
+    week:   weekLabel(),
+    pin:    null,
+    kids:   [makeKid(), makeKid()],
+    chores: [],
+    logs:   []
   };
 }
 
-// Add log entry
-function addLog(msg, type = 'info') {
-  const timestamp = new Date().toLocaleString();
-  const entry = `${timestamp}: ${msg}`;
-  state.logs.unshift(entry);
-  // Keep last 100 logs
-  state.logs = state.logs.slice(0, 100);
-  save();
+function makeKid() {
+  const subj = {};
+  SUBJECTS.forEach(s => { subj[s] = { current: 'B', baseline: 'B' }; });
+  return { xp: 0, streak: 0, subjects: subj };
 }
 
-// Confetti animation
-function confetti() {
-  const colors = ['#ff4d6d', '#2be9ff', '#f3c969', '#8fff8f'];
-  const count = 45;
-  
-  for (let i = 0; i < count; i++) {
-    const confetti = document.createElement('div');
-    confetti.className = 'confetti';
-    confetti.style.left = (Math.random() * 100) + 'vw';
-    confetti.style.background = colors[i % colors.length];
-    confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
-    confetti.style.animationDuration = (1.4 + Math.random() * 1.6) + 's';
-    
-    document.body.appendChild(confetti);
-    setTimeout(() => confetti.remove(), 2500);
+function weekLabel() {
+  const d = new Date(), mon = new Date(d);
+  mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+  return mon.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+    + ' - ' + sun.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+const db = {
+  h: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+  async load() {
+    try {
+      const res = await fetch(SUPABASE_URL + '/rest/v1/board_state?id=eq.' + FAMILY_ID + '&select=data', { headers: this.h });
+      const rows = await res.json();
+      if (Array.isArray(rows) && rows.length > 0 && rows[0].data) return rows[0].data;
+      return null;
+    } catch(e) { console.warn('Supabase load failed:', e); return null; }
+  },
+  async save(state) {
+    try {
+      await fetch(SUPABASE_URL + '/rest/v1/board_state', { method: 'POST', headers: this.h, body: JSON.stringify({ id: FAMILY_ID, data: state, updated_at: new Date().toISOString() }) });
+      dot('saved');
+    } catch(e) { console.warn('Supabase save failed:', e); dot('error'); }
   }
-  
-  // Add scanline effect
-  const scanline = document.createElement('div');
-  scanline.className = 'scanline';
-  document.body.appendChild(scanline);
-  setTimeout(() => scanline.remove(), 3000);
+};
+
+function dot(status) {
+  const e = document.getElementById('syncDot');
+  if (!e) return;
+  e.className = 'sync-dot ' + status;
+  e.title = { saved: 'Synced', saving: 'Saving...', error: 'Sync error', offline: 'Offline' }[status] || '';
 }
 
-// Render the entire UI
-function render() {
+async function loadState() {
+  dot('saving');
+  const remote = await db.load();
+  if (remote) { localStorage.setItem(STORAGE_KEY, JSON.stringify(remote)); dot('saved'); return remote; }
+  try { const raw = localStorage.getItem(STORAGE_KEY); if (raw) { dot('offline'); return JSON.parse(raw); } } catch(e) {}
+  dot('offline'); return defaultState();
+}
+
+async function saveState() {
+  dot('saving');
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(S));
+  await db.save(S);
+}
+
+function committedChores(kidIdx) {
+  return S.chores.filter(c => c.kid === kidIdx && !c.extra);
+}
+
+function choreValue(kidIdx) {
+  const total = committedChores(kidIdx).length;
+  return total === 0 ? 0 : S.base / total;
+}
+
+function gradeImprovementBonus(kid) {
+  let bonus = 0;
+  SUBJECTS.forEach(s => {
+    const base = gradeRank[kid.subjects[s].baseline] || 0;
+    const cur  = gradeRank[kid.subjects[s].current]  || 0;
+    if (cur > base) bonus += 1.25;
+  });
+  return Math.min(5, bonus);
+}
+
+function gradeGrowthPct(kid) {
+  let score = 0, max = 0;
+  SUBJECTS.forEach(s => {
+    const base = gradeRank[kid.subjects[s].baseline] || 0;
+    const cur  = gradeRank[kid.subjects[s].current]  || 0;
+    score += Math.max(0, base * 5 + (cur - base) * 10);
+    max += 60;
+  });
+  return max > 0 ? Math.round((score / max) * 100) : 0;
+}
+
+function kidPayout(kidIdx) {
+  const val   = choreValue(kidIdx);
+  const total = committedChores(kidIdx).length;
+  // Start at base $20 — dock for each missed or rejected chore
+  const missed = S.chores.filter(c => c.kid === kidIdx && !c.extra && (c.status === 'none' || c.status === 'rejected')).length;
+  const choreEarned = Math.max(0, S.base - (missed * val));
+  // Extra credit earns above base (capped at $5)
+  const extraEarned = Math.min(5, S.chores.filter(c => c.kid === kidIdx && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0));
+  // Grade improvement earns above base (capped at $5)
+  const gradeBonus = gradeImprovementBonus(S.kids[kidIdx]);
+  return Math.max(0, Math.min(S.maxPay, choreEarned + extraEarned + gradeBonus));
+}
+
+let S = defaultState();
+let filterActive = 'all';
+let pinPending = null;
+
+async function init() {
+  S = await loadState();
+  if (!S || !S.kids || !Array.isArray(S.kids)) S = defaultState();
   weekGuard();
-  autoApprove48h();
-  
-  // Update week info
-  document.getElementById('weekKey').textContent = formatDate(state.weekStart);
-  
-  const daysPassed = Math.floor((now() - state.weekStart) / (24 * 60 * 60 * 1000));
-  document.getElementById('weekProgress').textContent = `${daysPassed}/7 days`;
-  
-  // Update payout
-  const payout = calculatePayout();
-  document.getElementById('payoutVal').textContent = formatMoney(payout.total);
-  document.getElementById('approvedCount').textContent = payout.approved;
-  document.getElementById('pendingCount').textContent = payout.pending;
-  document.getElementById('rejectedCount').textContent = payout.rejected;
-  
-  document.getElementById('payoutBreakdown').innerHTML = `
-    <div class="small">Base: ${formatMoney(state.config.base)}</div>
-    <div class="small">Max payout: ${formatMoney(payout.maxPay)}</div>
-    <div class="small">Point value: ${formatMoney(state.config.pointValue)} per point</div>
-    <div class="small">Weekly goal: ${payout.weekGoal} points</div>
-    <div class="small">Approved points: ${payout.approved}/${payout.weekGoal} (${(payout.approvedRatio * 100).toFixed(1)}%)</div>
-    <div class="small">Grade bonus: ${formatMoney(state.config.gradeBonusPerSubject)} per improved subject</div>
-  `;
-  
-  // Update individual kid payout cards
-  // Always update kid cards, even if kidPayouts is empty (use default/calculated values)
-  state.kids.forEach(kid => {
-    const kidId = kid.id;
-    
-    // Find this kid's payout from the payout object
-    const kidPayout = payout.kidPayouts?.find(p => p.id === kidId);
-    
-    // Calculate values if kidPayout doesn't exist
-    const approvedPoints = kidPayout?.approvedPoints || 0;
-    const approvedRatio = kidPayout?.approvedRatio || Math.min(approvedPoints / state.config.weekGoal, 1);
-    const gradeBonus = kidPayout?.gradeBonus || calculateGradeBonus(kid);
-    const extraBonus = kidPayout?.extraBonus || 0;
-    const penalty = kidPayout?.penalty || 0;
-    const payoutValue = kidPayout?.payout || state.config.base;
-    
-    // Update kid name
-    document.getElementById(`${kidId}Name`).textContent = kid.name;
-    
-    // Update payout value
-    document.getElementById(`${kidId}PayoutVal`).textContent = formatMoney(payoutValue);
-    
-    // Update progress bar (from $0 to $30)
-    // Progress bar: $0=0%, $20=66.67%, $30=100%
-  const progressPercentage = payoutValue <= 20 
-    ? (payoutValue / 20) * 66.67 
-    : 66.67 + ((payoutValue - 20) / 10) * 33.33;
-    const progressElement = document.getElementById(`${kidId}Progress`);
-    if (progressElement) {
-      progressElement.style.width = `${Math.max(0, Math.min(100, progressPercentage))}%`;
-    }
-    
-    // Update points and pending count
-    const pendingCount = state.chores.filter(c => c.status === 'pending' && c.kid === kidId).length;
-    document.getElementById(`${kidId}ApprovedPts`).textContent = approvedPoints;
-    document.getElementById(`${kidId}WeekGoal`).textContent = state.config.weekGoal;
-    document.getElementById(`${kidId}PendingCount`).textContent = `${pendingCount} pending`;
-    
-    // Update breakdown
-    document.getElementById(`${kidId}Breakdown`).innerHTML = `
-      <div class="small">Base: ${formatMoney(state.config.base)}</div>
-      <div class="small">Approved points: ${approvedPoints}/${state.config.weekGoal} (${(approvedRatio * 100).toFixed(1)}%)</div>
-      <div class="small">Grade bonus: ${formatMoney(gradeBonus)} (${gradeBonus > 0 ? 'improved subjects' : 'no improvement'})</div>
-      <div class="small">Extra credit: ${formatMoney(extraBonus)}</div>
-      <div class="small">Penalties: -${formatMoney(penalty)}</div>
-      <div class="small">Total: ${formatMoney(payoutValue)}</div>
-    `;
+  bindEvents();
+  render();
+  startClock();
+  registerSW();
+}
+
+function weekGuard() {
+  const current = weekLabel();
+  if (S.week === current) return;
+  S.kids.forEach((kid, i) => {
+    const rec = S.chores.filter(c => c.kid === i && c.recurring && !c.extra);
+    kid.streak = (rec.length > 0 && rec.every(c => c.status === 'approved')) ? (kid.streak || 0) + 1 : 0;
+    SUBJECTS.forEach(s => { kid.subjects[s].baseline = kid.subjects[s].current; });
   });
-  
-  // Update chore kid dropdown
-  const choreKidSelect = document.getElementById('choreKid');
-  if (choreKidSelect) {
-    // Clear existing options except "Shared"
-    while (choreKidSelect.options.length > 0) {
-      choreKidSelect.remove(0);
+  S.chores = [];
+  S.week = current;
+  log('New week started');
+  saveState();
+}
+
+function autoApprove() {
+  const cutoff = now() - 48 * 60 * 60 * 1000;
+  let changed = false;
+  S.chores.forEach(c => {
+    if (c.status === 'pending' && c.submittedAt && c.submittedAt <= cutoff) {
+      c.status = 'approved';
+      if (typeof c.kid === 'number') S.kids[c.kid].xp = (S.kids[c.kid].xp || 0) + 1;
+      changed = true;
+      log('Auto-approved "' + c.name + '" after 48h');
     }
-    
-    // Add kid options
-    state.kids.forEach(kid => {
-      const option = document.createElement('option');
-      option.value = kid.id;
-      option.textContent = `${kid.emoji || ''} ${kid.name}`;
-      choreKidSelect.appendChild(option);
+  });
+  if (changed) saveState();
+}
+
+function log(msg) {
+  S.logs = [new Date().toLocaleString() + ': ' + msg, ...(S.logs || [])].slice(0, 100);
+}
+
+function expandChore(def) {
+  const instances = def.freq === 'daily' ? 7 : def.freq === 'twice-weekly' ? 2 : 1;
+  for (let i = 0; i < instances; i++) {
+    const label = instances === 1 ? def.name
+      : def.freq === 'daily' ? def.name + ' - ' + DAYS[i]
+      : def.name + ' (' + (i + 1) + '/2)';
+    S.chores.push({
+      id: uid(), name: label, baseName: def.name,
+      kid: def.kid, freq: def.freq,
+      extra: def.extra || false,
+      bonusDollars: def.bonusDollars || 0,
+      dod: def.dod || '',
+      recurring: def.recurring || false,
+      status: 'none', createdAt: now(), submittedAt: null
     });
-    
-    // Add shared option
-    const sharedOption = document.createElement('option');
-    sharedOption.value = 'shared';
-    sharedOption.textContent = 'Shared';
-    choreKidSelect.appendChild(sharedOption);
   }
-  
-  // Update grades summary (simplified since payout is now in kid cards)
-  const gradeSummary = document.getElementById('gradeSummary');
-  gradeSummary.innerHTML = state.kids.map(k => {
-    const gradeBonus = calculateGradeBonus(k);
-    
-    return `
-    <div class="row kid${k.id.slice(-1)}" style="margin:6px 0;padding:8px;background:rgba(0,0,0,0.1);border-radius:8px">
-      <div style="flex:1">
-        <b>${k.emoji || ''} ${k.name}</b>
-        <div class="small muted">Grade bonus: ${formatMoney(gradeBonus)}</div>
-        <div class="small muted" style="font-size:10px;margin-top:2px">
-          ${Object.entries(k.subjects).map(([subject, data]) => {
-            const baseRank = gradeRank[data.baseline] || 0;
-            const currentRank = gradeRank[data.current] || 0;
-            const improvement = currentRank - baseRank;
-            const bonus = improvement > 0 ? `(+$${state.config.gradeBonusPerSubject})` : '';
-            return `${subject}: ${data.current} (baseline: ${data.baseline}) ${bonus}`;
-          }).join(' • ')}
-        </div>
-      </div>
-      <span class="pill grade-${k.grade.toLowerCase()}">${k.grade}</span>
-    </div>
-  `}).join('');
-  
-  // Update activity log
-  const activity = document.getElementById('activity');
-  activity.innerHTML = state.logs.slice(0, 10).map(log => `
-    <div class="small muted" style="margin:4px 0;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05)">
-      • ${log}
-    </div>
-  `).join('') || '<span class="muted">No activity yet.</span>';
-  
-  // Render chore list
+}
+
+function el(id) { return document.getElementById(id); }
+
+function render() {
+  autoApprove();
+  const wk = el('weekKey'); if (wk) wk.textContent = S.week;
+  const p0 = kidPayout(0), p1 = kidPayout(1);
+  el('payoutVal').textContent     = money(p0 + p1);
+  el('approvedCount').textContent = S.chores.filter(c => c.status === 'approved').length;
+  el('pendingCount').textContent  = S.chores.filter(c => c.status === 'pending').length;
+  el('rejectedCount').textContent = S.chores.filter(c => c.status === 'rejected').length;
+
+  [0, 1].forEach(i => {
+    const n           = i === 0 ? 'kid1' : 'kid2';
+    const pay         = i === 0 ? p0 : p1;
+    const val         = choreValue(i);
+    const total       = committedChores(i).length;
+    const approved    = S.chores.filter(c => c.kid === i && !c.extra && c.status === 'approved').length;
+    const pending     = S.chores.filter(c => c.kid === i && c.status === 'pending').length;
+    const extraEarned = Math.min(5, S.chores.filter(c => c.kid === i && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0));
+    const gradeBonus  = gradeImprovementBonus(S.kids[i]);
+    const growthPct   = gradeGrowthPct(S.kids[i]);
+    const pct         = Math.max(0, Math.min(100, (pay / S.maxPay) * 100));
+
+    el(n + 'Name').textContent         = S.names[i];
+    el(n + 'PayoutVal').textContent    = money(pay);
+    el(n + 'PendingCount').textContent = pending + ' pending';
+    el(n + 'ChoreRatio').textContent   = approved + '/' + total + ' chores done';
+    el(n + 'GradeRatio').textContent   = growthPct + '% grade growth';
+    const bar = el(n + 'Progress'); if (bar) bar.style.width = pct + '%';
+    const lvl = el(n + 'Level'); if (lvl) lvl.textContent = 'Level: ' + LEVELS[Math.min(Math.floor((S.kids[i].xp || 0) / 100), LEVELS.length - 1)];
+    const bk = el(n + 'Breakdown');
+    if (bk) bk.innerHTML =
+      '<div class="small muted">Each chore worth: <b>' + (total > 0 ? money(val) : '--') + '</b> (' + money(S.base) + ' / ' + total + ' chores)</div>' +
+      '<div class="small">Chores earned: <b>' + money(approved * val) + '</b> (' + approved + '/' + total + ' done)</div>' +
+      (extraEarned > 0 ? '<div class="small" style="color:#2ed573">Extra credit: <b>+' + money(extraEarned) + '</b></div>' : '') +
+      (gradeBonus  > 0 ? '<div class="small" style="color:#a78bfa">Grade improvement: <b>+' + money(gradeBonus) + '</b></div>' : '') +
+      '<div class="small" style="font-weight:700;margin-top:6px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.1)">This week: <b>' + money(pay) + '</b></div>';
+  });
+
+  const gs = el('gradeSummary');
+  if (gs) gs.innerHTML = S.kids.map((kid, i) => {
+    const rows = SUBJECTS.map(s => {
+      const cur = kid.subjects[s].current, base = kid.subjects[s].baseline;
+      const diff = (gradeRank[cur] || 0) - (gradeRank[base] || 0);
+      const arrow = diff > 0 ? '<span style="color:#2ed573">▲</span>' : diff < 0 ? '<span style="color:#ff4757">▼</span>' : '<span style="color:#555">-</span>';
+      return '<span class="small">' + s + ': <b>' + cur + '</b>' + arrow + '</span>';
+    }).join('&nbsp;&nbsp;');
+    return '<div style="margin:8px 0;padding:8px;background:rgba(0,0,0,0.15);border-radius:8px"><b>' + S.emojis[i] + ' ' + S.names[i] + '</b><br><span style="line-height:2">' + rows + '</span></div>';
+  }).join('');
+
   renderChores();
-  
-  // Update data size
-  updateDataSize();
-  
-  // Update calculator if drawer is open
-  if (document.getElementById('calcDrawer').classList.contains('open')) {
-    renderCalculator();
-  }
+
+  const act = el('activity');
+  if (act) act.innerHTML = (S.logs || []).slice(0, 10).map(l => '<div class="small muted" style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05)">* ' + l + '</div>').join('') || '<span class="muted small">No activity yet.</span>';
+  const ds = el('dataSize'); if (ds) ds.textContent = (JSON.stringify(S).length / 1024).toFixed(2) + ' KB';
 }
 
-// Render chore list with filtering
 function renderChores() {
-  const list = document.getElementById('choreList');
-  const filtered = filterChores(state.chores, currentFilter);
-  
-  if (filtered.length === 0) {
-    list.innerHTML = '<div class="muted" style="text-align:center;padding:20px">No chores found</div>';
-    return;
-  }
-  
-  // Sort: pinned first, then by creation date
-  const sorted = [...filtered].sort((a, b) => {
-    if (b.pinned !== a.pinned) return b.pinned - a.pinned;
-    return b.createdAt - a.createdAt;
-  });
-  
-  list.innerHTML = sorted.map(chore => {
-    const kid = state.kids.find(k => k.id === chore.kid) || { name: 'Shared' };
-    const timeAgo = chore.completedAt ? 
-      Math.floor((now() - chore.completedAt) / (60 * 60 * 1000)) + 'h ago' : 
-      '';
-    
-    return `
-      <div class="todo ${chore.pinned ? 'pin' : ''} ${chore.autoApproved ? 'glow-border' : ''}" data-id="${chore.id}">
-        <button data-action="togglePin" title="${chore.pinned ? 'Unpin' : 'Pin'}">
-          ${chore.pinned ? '📌' : '📍'}
-        </button>
-        <div style="flex:1">
-          <div><b>${chore.name}</b> <span class="small muted">(${chore.points} pts • ${chore.frequency} • ${kid.emoji || ''} ${kid.name})</span></div>
-          <div class="small stat-${chore.status}">
-            ${chore.status} ${timeAgo ? `• ${timeAgo}` : ''}
-            ${chore.autoApproved ? '• ⚡ Auto' : ''}
-            ${chore.totalInstances > 1 ? `• Instance ${chore.instanceNumber}/${chore.totalInstances}` : ''}
-            ${chore.extra && chore.extra.enabled ? `• +${chore.extra.points} extra points` : ''}
-          </div>
-        </div>
-        ${chore.status === 'pending' ? `
-          <button data-action="complete">Done</button>
-          <button data-action="approve" class="approve-btn">Approve</button>
-          <button data-action="reject" class="reject-btn">Reject</button>
-        ` : `
-          <button data-action="reset">Reset</button>
-          <button data-action="delete">Delete</button>
-        `}
-      </div>
-    `;
+  const list = el('choreList'); if (!list) return;
+  let chores = [...S.chores];
+  if (filterActive === 'pending')  chores = chores.filter(c => c.status === 'pending');
+  if (filterActive === 'approved') chores = chores.filter(c => c.status === 'approved');
+  if (filterActive === 'kid1')     chores = chores.filter(c => c.kid === 0);
+  if (filterActive === 'kid2')     chores = chores.filter(c => c.kid === 1);
+  if (chores.length === 0) { list.innerHTML = '<div class="muted" style="text-align:center;padding:20px">No chores here yet!</div>'; return; }
+
+  list.innerHTML = chores.map(c => {
+    const kidName  = c.kid === 0 ? S.names[0] : c.kid === 1 ? S.names[1] : 'Shared';
+    const kidEmoji = c.kid === 0 ? S.emojis[0] : c.kid === 1 ? S.emojis[1] : '👨‍👩‍👧';
+    const val      = (typeof c.kid === 'number' && !c.extra) ? choreValue(c.kid) : 0;
+    const valLabel = c.extra ? '+' + money(c.bonusDollars || 0) + ' bonus' : money(val);
+    const recIcon  = c.recurring ? ' 🔁' : '';
+    const extraIcon = c.extra ? ' ⭐' : '';
+    const dodNote  = c.dod ? '<div class="small muted" style="margin-top:2px;font-style:italic">Done when: ' + c.dod + '</div>' : '';
+    const hrs      = c.submittedAt ? Math.floor((now() - c.submittedAt) / 3600000) : 0;
+    const border   = c.status === 'approved' ? '#2ed573' : c.status === 'pending' ? '#ffa502' : c.status === 'rejected' ? '#ff4757' : '#333';
+    const statusLabel = c.status === 'none' ? '<span style="color:#555">Not done yet</span>'
+      : c.status === 'pending'  ? '<span style="color:#ffa502">Waiting for approval (' + hrs + 'h ago)</span>'
+      : c.status === 'approved' ? '<span style="color:#2ed573">Approved - earned ' + valLabel + '</span>'
+      : '<span style="color:#ff4757">Not approved - redo it</span>';
+    const actionBtns = c.status === 'none' ? '<button data-action="submit" data-id="' + c.id + '">Mark Done</button>'
+      : c.status === 'pending' ? '<button data-action="approve" data-id="' + c.id + '" class="approve-btn">Approve</button><button data-action="reject" data-id="' + c.id + '" class="reject-btn">Reject</button>'
+      : '<button data-action="reset" data-id="' + c.id + '">Reset</button>';
+    return '<div class="todo" style="border-left:3px solid ' + border + '" data-id="' + c.id + '"><div style="flex:1"><div><b>' + c.name + '</b>' + recIcon + extraIcon + ' <span class="small muted">(' + valLabel + ' - ' + kidEmoji + ' ' + kidName + ')</span></div>' + dodNote + '<div style="margin-top:3px">' + statusLabel + '</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + actionBtns + '<button data-action="delete" data-id="' + c.id + '" style="opacity:.4;font-size:.8rem;padding:4px 8px">X</button></div></div>';
   }).join('');
 }
 
-function filterChores(chores, filter) {
-  switch (filter) {
-    case 'pending': return chores.filter(c => c.status === 'pending');
-    case 'approved': return chores.filter(c => c.status === 'approved');
-    case 'rejected': return chores.filter(c => c.status === 'rejected');
-    case 'kid1': return chores.filter(c => c.kid === 'kid1');
-    case 'kid2': return chores.filter(c => c.kid === 'kid2');
-    default: return chores;
+function confetti() {
+  const colors = ['#ff4757','#00d2d3','#ffa502','#2ed573','#a78bfa'];
+  for (let i = 0; i < 35; i++) {
+    const s = document.createElement('div');
+    s.className = 'confetti-piece';
+    s.style.cssText = 'left:' + (Math.random()*100) + 'vw;background:' + colors[i%colors.length] + ';width:' + (6+Math.random()*8) + 'px;height:' + (6+Math.random()*8) + 'px;border-radius:' + (Math.random()>.5?'50%':'2px') + ';animation-duration:' + (1.2+Math.random()) + 's;animation-delay:' + (Math.random()*.3) + 's';
+    document.body.appendChild(s);
+    setTimeout(() => s.remove(), 2000);
   }
 }
 
-// Render calculator with new gradeCalc structure
-function renderCalculator() {
-  const kidSelect = document.getElementById('calcKidSelect');
-  const subjectSelect = document.getElementById('calcSubjectSelect');
-  const targetGradeSelect = document.getElementById('targetGradeSelect');
-  const targetCategorySelect = document.getElementById('targetCategorySelect');
-  
-  // Populate kid selector
-  if (kidSelect) {
-    kidSelect.innerHTML = state.kids.map(k => 
-      `<option value="${k.id}">${k.emoji || ''} ${k.name}</option>`
-    ).join('');
-  }
-  
-  // Get selected kid
-  const selectedKidId = kidSelect ? kidSelect.value : 'kid1';
-  const kid = state.kids.find(k => k.id === selectedKidId);
-  if (!kid || !kid.gradeCalc) return;
-  
-  // Populate subject selector
-  if (subjectSelect) {
-    subjectSelect.innerHTML = Object.keys(kid.gradeCalc).map(subject => 
-      `<option value="${subject}">${subject}</option>`
-    ).join('');
-  }
-  
-  // Get selected subject
-  const selectedSubject = subjectSelect ? subjectSelect.value : 'Math';
-  const subjectData = kid.gradeCalc[selectedSubject];
-  if (!subjectData) return;
-  
-  // Category weights
-  const weights = { tests: 40, quizzes: 30, homework: 30 };
-  
-  // Calculate averages and contributions
-  const rows = document.getElementById('calcRows');
-  rows.innerHTML = Object.entries(subjectData).map(([category, scores]) => {
-    const avg = scores.length ? 
-      (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1) : 
-      0;
-    const contribution = (avg * weights[category] / 100).toFixed(1);
-    
-    return `
-      <div class="card" style="margin-bottom:12px">
-        <div class="row" style="justify-content:space-between;margin-bottom:8px">
-          <b>${category.charAt(0).toUpperCase() + category.slice(1)}</b>
-          <span class="small muted">Weight: ${weights[category]}%</span>
-        </div>
-        <div class="small muted" style="margin-bottom:6px">
-          Scores: ${scores.length ? scores.join(', ') : 'None yet'}
-        </div>
-        <div class="row" style="justify-content:space-between">
-          <span class="small">Average: ${avg}%</span>
-          <span class="small">Contribution: ${contribution}%</span>
-        </div>
-        <div class="row" style="margin-top:8px;gap:4px">
-          <input type="number" min="0" max="100" placeholder="Add score" 
-                 data-kid="${kid.id}" data-subject="${selectedSubject}" data-category="${category}"
-                 style="flex:1;padding:4px;font-size:12px">
-          <button class="small" data-action="add-score" 
-                  data-kid="${kid.id}" data-subject="${selectedSubject}" data-category="${category}">
-            Add
-          </button>
-        </div>
-      </div>
-    `;
-  }).join('');
-  
-  // Calculate weighted grade for this subject
-  let weighted = 0;
-  Object.entries(subjectData).forEach(([category, scores]) => {
-    const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-    weighted += avg * (weights[category] / 100);
-  });
-  
-  document.getElementById('weightedOut').textContent = weighted.toFixed(1) + '%';
-  
-  // Determine letter grade
-  let letterGrade = 'F';
-  if (weighted >= 90) letterGrade = 'A';
-  else if (weighted >= 80) letterGrade = 'B';
-  else if (weighted >= 70) letterGrade = 'C';
-  else if (weighted >= 60) letterGrade = 'D';
-  
-  document.getElementById('letterGrade').textContent = letterGrade;
-  document.getElementById('letterGrade').className = `grade-${letterGrade.toLowerCase()}`;
-  
-  // Update sparkline with subject grade history
-  updateSparkline(kid.gradeHistory);
-  
-  // Add to grade history if not already there
-  const currentGrade = Number(weighted.toFixed(1));
-  if (!kid.gradeHistory.includes(currentGrade)) {
-    kid.gradeHistory.push(currentGrade);
-    kid.gradeHistory = kid.gradeHistory.slice(-12); // Keep last 12
-    save();
-  }
-  
-  // Populate "What do I need?" dropdowns
-  if (targetGradeSelect) {
-    targetGradeSelect.innerHTML = `
-      <option value="90">A (90%)</option>
-      <option value="80">B (80%)</option>
-      <option value="70">C (70%)</option>
-      <option value="60">D (60%)</option>
-    `;
-  }
-  
-  if (targetCategorySelect) {
-    targetCategorySelect.innerHTML = `
-      <option value="tests">Tests</option>
-      <option value="quizzes">Quizzes</option>
-      <option value="homework">Homework</option>
-    `;
-  }
-  
-  // Calculate and display "What do I need?" result
-  calculateWhatDoINeed(kid, selectedSubject, subjectData, weights);
+function requirePin(onSuccess) {
+  if (!S.pin) { onSuccess(); return; }
+  pinPending = onSuccess;
+  el('parentPin').value = '';
+  el('pinModal').showModal();
 }
 
-// Calculate "What do I need?" tool
-function calculateWhatDoINeed(kid, subject, subjectData, weights) {
-  const targetGradeSelect = document.getElementById('targetGradeSelect');
-  const targetCategorySelect = document.getElementById('targetCategorySelect');
-  const whatDoINeedResult = document.getElementById('whatDoINeedResult');
-  
-  if (!targetGradeSelect || !targetCategorySelect || !whatDoINeedResult) return;
-  
-  const targetGrade = parseFloat(targetGradeSelect.value);
-  const targetCategory = targetCategorySelect.value;
-  
-  // Calculate current weighted grade without the target category
-  let currentWeighted = 0;
-  Object.entries(subjectData).forEach(([category, scores]) => {
-    if (category !== targetCategory) {
-      const avg = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : 0;
-      currentWeighted += avg * (weights[category] / 100);
-    }
+function bindEvents() {
+  el('addChore').addEventListener('click', () => {
+    const name    = el('choreName').value.trim();
+    const freq    = el('choreFrequency').value;
+    const kid     = el('choreKid').value;
+    const rec     = el('choreRecurring').checked;
+    const isExtra = el('choreExtra').checked;
+    const dod     = el('choreDod').value.trim();
+    const bonus   = isExtra ? (parseFloat(el('choreBonusDollars').value) || 1) : 0;
+    if (!name) { alert('Enter a chore name'); return; }
+    const kidIdx = kid === 'kid1' ? 0 : kid === 'kid2' ? 1 : 'shared';
+    expandChore({ name, freq, kid: kidIdx, extra: isExtra, bonusDollars: bonus, dod, recurring: rec });
+    el('choreName').value = ''; el('choreDod').value = '';
+    const instances = freq === 'daily' ? 7 : freq === 'twice-weekly' ? 2 : 1;
+    log('Added "' + name + '" (' + freq + ', ' + instances + ' instance' + (instances > 1 ? 's' : '') + ') for ' + (kidIdx === 'shared' ? 'shared' : S.names[kidIdx]));
+    saveState(); render();
   });
-  
-  // Calculate required score in target category to reach target grade
-  const weight = weights[targetCategory];
-  const requiredScore = ((targetGrade - currentWeighted) * 100) / weight;
-  
-  // Format result
-  let resultText = '';
-  if (requiredScore > 100) {
-    resultText = `Not reachable through ${targetCategory} alone. You'd need ${requiredScore.toFixed(1)}%, which is impossible.`;
-  } else if (requiredScore < 0) {
-    resultText = `You've already reached your target grade! Current weighted: ${(currentWeighted + (subjectData[targetCategory].length ? (subjectData[targetCategory].reduce((a, b) => a + b, 0) / subjectData[targetCategory].length * weight / 100) : 0)).toFixed(1)}%`;
-  } else {
-    resultText = `To get a ${targetGrade}% overall, you need ${requiredScore.toFixed(1)}% on your next ${targetCategory.slice(0, -1)}.`;
-  }
-  
-  whatDoINeedResult.textContent = resultText;
-}
 
-function updateSparkline(data) {
-  const svg = document.getElementById('spark');
-  if (!svg || data.length < 2) return;
-  
-  const min = Math.min(...data, 60);
-  const max = Math.max(...data, 100);
-  const width = 340;
-  const height = 110;
-  const padding = 12;
-  
-  const points = data.map((value, index) => {
-    const x = padding + (index * (width - 2 * padding) / Math.max(1, data.length - 1));
-    const y = height - padding - ((value - min) / Math.max(1, max - min)) * (height - 2 * padding);
-    return `${x},${y}`;
-  }).join(' ');
-  
-  svg.innerHTML = `
-    <rect width="100%" height="100%" fill="#17192a" rx="12" />
-    <line x1="${padding}" y1="${height - padding}" x2="${width - padding}" y2="${height - padding}" stroke="#3b3f5c" stroke-width="1" />
-    <polyline fill="none" stroke="#2be9ff" stroke-width="3" points="${points}" />
-    ${data.map((value, index) => {
-      const x = padding + (index * (width - 2 * padding) / Math.max(1, data.length - 1));
-      const y = height - padding - ((value - min) / Math.max(1, max - min)) * (height - 2 * padding);
-      return `<circle cx="${x}" cy="${y}" r="3" fill="#2be9ff" />`;
-    }).join('')}
-  `;
-}
+  el('choreExtra').addEventListener('change', () => {
+    const row = el('bonusDollarsRow');
+    if (row) row.style.display = el('choreExtra').checked ? 'flex' : 'none';
+  });
 
-// Event Listeners
-function setupEventListeners() {
-  // Setup modal events
-  document.getElementById('setupSave')?.addEventListener('click', handleSetupSubmit);
-  document.getElementById('setupCancel')?.addEventListener('click', handleSetupSkip);
-  
-  // Add chore
-  document.getElementById('addChore').addEventListener('click', () => {
-    const name = document.getElementById('choreName').value.trim();
-    const points = Number(document.getElementById('chorePts').value) || 10;
-    const frequency = document.getElementById('choreFrequency').value;
-    const kid = document.getElementById('choreKid').value;
-    
-    if (!name) {
-      alert('Please enter a chore name');
-      return;
+  el('choreList').addEventListener('click', e => {
+    const btn = e.target.closest('button[data-action]'); if (!btn) return;
+    const id = btn.dataset.id, action = btn.dataset.action;
+    const chore = S.chores.find(c => c.id === id); if (!chore) return;
+    if (action === 'submit') {
+      chore.status = 'pending'; chore.submittedAt = now();
+      log((typeof chore.kid === 'number' ? S.names[chore.kid] : 'Shared') + ' submitted "' + chore.name + '"');
+      saveState(); render();
     }
-    
-    // Determine instances based on frequency
-    let totalInstances = 1;
-    switch (frequency) {
-      case 'daily':
-        totalInstances = 7;
-        break;
-      case 'twice-weekly':
-        totalInstances = 2;
-        break;
-      case 'weekly':
-      default:
-        totalInstances = 1;
-        break;
+    if (action === 'approve') {
+      requirePin(() => {
+        chore.status = 'approved';
+        if (typeof chore.kid === 'number') S.kids[chore.kid].xp = (S.kids[chore.kid].xp || 0) + 1;
+        log('Approved "' + chore.name + '"'); confetti(); saveState(); render();
+      });
     }
-    
-    // Calculate points per instance
-    const pointsPerInstance = Math.round(points / totalInstances);
-    
-    // Create separate chore entries for each instance
-    for (let i = 0; i < totalInstances; i++) {
-      const chore = {
-        id: uid(),
-        name: `${name} (${i + 1}/${totalInstances})`,
-        originalName: name,
-        points: pointsPerInstance,
-        frequency,
-        instanceNumber: i + 1,
-        totalInstances,
-        kid,
-        status: 'pending',
-        pinned: false,
-        createdAt: now(),
-        completedAt: null,
-        autoApproved: false,
-        recurring: false,
-        extra: {
-          enabled: false,
-          points: 0
-        }
-      };
-      
-      state.chores.unshift(chore);
+    if (action === 'reject') {
+      requirePin(() => { chore.status = 'rejected'; log('Rejected "' + chore.name + '"'); saveState(); render(); });
     }
-    
-    document.getElementById('choreName').value = '';
-    addLog(`Added ${frequency} chore: "${name}" (${points} total points, ${totalInstances} instances × ${pointsPerInstance} points each) for ${kid === 'shared' ? 'shared' : state.kids.find(k => k.id === kid)?.name}`);
-    render();
+    if (action === 'reset') { chore.status = 'none'; chore.submittedAt = null; saveState(); render(); }
+    if (action === 'delete') { S.chores = S.chores.filter(c => c.id !== id); saveState(); render(); }
   });
-  
-  // Chore list actions
-  document.getElementById('choreList').addEventListener('click', (e) => {
-    const button = e.target.closest('button[data-action]');
-    if (!button) return;
-    
-    const choreId = button.closest('.todo').dataset.id;
-    const chore = state.chores.find(c => c.id === choreId);
-    if (!chore) return;
-    
-    const action = button.dataset.action;
-    
-    switch (action) {
-      case 'togglePin':
-        chore.pinned = !chore.pinned;
-        addLog(`${chore.pinned ? 'Pinned' : 'Unpinned'} "${chore.name}"`);
-        break;
-        
-      case 'complete':
-        chore.completedAt = now();
-        chore.status = 'pending';
-        addLog(`Completed "${chore.name}"`);
-        break;
-        
-      case 'approve':
-      case 'reject':
-        pendingPinAction = { action, choreId };
-        showPinModal();
-        return; // Wait for PIN verification
-        
-      case 'reset':
-        chore.status = 'pending';
-        chore.completedAt = null;
-        chore.autoApproved = false;
-        addLog(`Reset "${chore.name}"`);
-        break;
-        
-      case 'delete':
-        if (confirm(`Delete chore "${chore.name}"?`)) {
-          state.chores = state.chores.filter(c => c.id !== choreId);
-          addLog(`Deleted "${chore.name}"`);
-        }
-        break;
-    }
-    
-    render();
-  });
-  
-  // Filter buttons
+
   document.querySelectorAll('[data-filter]').forEach(btn => {
     btn.addEventListener('click', () => {
       document.querySelectorAll('[data-filter]').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      currentFilter = btn.dataset.filter;
-      renderChores();
+      btn.classList.add('active'); filterActive = btn.dataset.filter; renderChores();
     });
   });
-  
-  // New week
-  document.getElementById('newWeekBtn').addEventListener('click', () => {
-    if (!confirm('Start a new week? Current chores will be cleared (except recurring). Baselines will be updated to current grades.')) return;
-    
-    const oldWeek = formatDate(state.weekStart);
-    state.weekStart = getWeekStart();
-    // Keep only recurring chores
-    state.chores = state.chores.filter(c => c.recurring);
-    
-    // Auto-update baselines: set baseline = current for all subjects
-    state.kids.forEach(kid => {
-      Object.keys(kid.subjects).forEach(subject => {
-        kid.subjects[subject].baseline = kid.subjects[subject].current;
-      });
-      // Also update baseline grade
-      kid.baselineGrade = kid.grade;
+
+  el('newWeekBtn').addEventListener('click', () => {
+    if (!confirm('Start a new week? All chores clear. Baselines update.')) return;
+    S.kids.forEach((kid, i) => {
+      SUBJECTS.forEach(s => { kid.subjects[s].baseline = kid.subjects[s].current; });
     });
-    
-    addLog(`Manual new week reset (was ${oldWeek}) - baselines updated`);
-    render();
+    S.chores = []; S.week = weekLabel(); log('New week started'); saveState(); render();
   });
-  
-  // Grade modal
-  const gradeModal = document.getElementById('gradeModal');
-  document.getElementById('openGradeBtn').addEventListener('click', () => {
-    const rows = document.getElementById('gradeRows');
-    rows.innerHTML = state.kids.map(k => {
-      const subjectsHtml = Object.entries(k.subjects).map(([subject, data]) => `
-        <div class="row" style="margin:5px 0;align-items:center">
-          <label style="flex:1;font-size:12px">${subject.charAt(0).toUpperCase() + subject.slice(1)}</label>
-          <select data-kid="${k.id}" data-subject="${subject}" data-type="current" style="width:80px;font-size:12px">
-            ${['A', 'B', 'C', 'D', 'F'].map(g => 
-              `<option value="${g}" ${data.current === g ? 'selected' : ''}>${g}</option>`
-            ).join('')}
-          </select>
-          <span class="small muted" style="margin-left:4px;font-size:10px">current grade</span>
-        </div>
-      `).join('');
-      
-      return `
-        <div style="margin:15px 0;padding:10px;background:rgba(0,0,0,0.1);border-radius:8px">
-          <div style="font-weight:bold;margin-bottom:8px">${k.emoji || ''} ${k.name}</div>
-          ${subjectsHtml}
-        </div>
-      `;
-    }).join('');
-    gradeModal.showModal();
+
+  el('openGradeBtn').addEventListener('click', () => {
+    el('gradeRows').innerHTML = S.kids.map((kid, i) =>
+      '<div style="margin:12px 0;padding:10px;background:rgba(0,0,0,0.15);border-radius:8px"><b>' + S.emojis[i] + ' ' + S.names[i] + '</b>' +
+      SUBJECTS.map(s => '<div style="display:flex;align-items:center;gap:8px;margin:6px 0"><label style="flex:1;font-size:.8rem">' + s + '</label><select data-kid="' + i + '" data-subject="' + s + '" style="width:70px">' + ['A','B','C','D','F'].map(g => '<option value="' + g + '"' + (kid.subjects[s].current === g ? ' selected' : '') + '>' + g + '</option>').join('') + '</select><span style="font-size:.7rem;color:#555">was: ' + kid.subjects[s].baseline + '</span></div>').join('') + '</div>'
+    ).join('');
+    el('gradeModal').showModal();
   });
-  
-  document.getElementById('gradeCancel').addEventListener('click', () => gradeModal.close());
-  document.getElementById('gradeSave').addEventListener('click', () => {
-    document.querySelectorAll('[data-kid][data-subject]').forEach(select => {
-      const kid = state.kids.find(k => k.id === select.dataset.kid);
-      if (kid && kid.subjects[select.dataset.subject]) {
-        const type = select.dataset.type; // 'current' or 'baseline'
-        const oldValue = kid.subjects[select.dataset.subject][type];
-        const newValue = select.value;
-        
-        if (oldValue !== newValue) {
-          kid.subjects[select.dataset.subject][type] = newValue;
-          addLog(`Updated ${kid.name} ${select.dataset.subject} ${type}: ${oldValue} → ${newValue}`);
-          
-          // Update overall grade based on average of current subject grades
-          if (type === 'current') {
-            const currentGrades = Object.values(kid.subjects).map(s => s.current);
-            const gradeCounts = currentGrades.reduce((acc, grade) => {
-              acc[grade] = (acc[grade] || 0) + 1;
-              return acc;
-            }, {});
-            
-            // Find most common grade
-            let mostCommon = 'B';
-            let maxCount = 0;
-            for (const [grade, count] of Object.entries(gradeCounts)) {
-              if (count > maxCount) {
-                maxCount = count;
-                mostCommon = grade;
-              }
-            }
-            kid.grade = mostCommon;
-          }
-        }
-      }
-    });
-    gradeModal.close();
-    render();
+  el('gradeCancel').addEventListener('click', () => el('gradeModal').close());
+  el('gradeSave').addEventListener('click', () => {
+    document.querySelectorAll('[data-kid][data-subject]').forEach(sel => { S.kids[parseInt(sel.dataset.kid)].subjects[sel.dataset.subject].current = sel.value; });
+    log('Grades updated'); el('gradeModal').close(); saveState(); render();
   });
-  
-  // Calculator drawer
-  const drawer = document.getElementById('calcDrawer');
-  document.getElementById('openCalcBtn').addEventListener('click', () => {
-    drawer.classList.add('open');
-    renderCalculator();
+
+  el('settingsBtn').addEventListener('click', () => {
+    el('cfgName0').value = S.names[0]; el('cfgName1').value = S.names[1];
+    el('cfgEmoji0').value = S.emojis[0]; el('cfgEmoji1').value = S.emojis[1];
+    el('cfgBase').value = S.base; el('cfgMax').value = S.maxPay;
+    el('currentPin').value = ''; el('newPin').value = ''; el('pinStatus').textContent = '';
+    el('settingsModal').showModal();
   });
-  document.getElementById('calcBtn').addEventListener('click', () => {
-    drawer.classList.add('open');
-    renderCalculator();
+  el('settingsClose').addEventListener('click', () => el('settingsModal').close());
+  el('saveSettingsConfig').addEventListener('click', () => {
+    S.names[0]  = el('cfgName0').value.trim()  || S.names[0];
+    S.names[1]  = el('cfgName1').value.trim()  || S.names[1];
+    S.emojis[0] = el('cfgEmoji0').value.trim() || S.emojis[0];
+    S.emojis[1] = el('cfgEmoji1').value.trim() || S.emojis[1];
+    S.base      = parseFloat(el('cfgBase').value) || S.base;
+    S.maxPay    = parseFloat(el('cfgMax').value)  || S.maxPay;
+    log('Settings updated'); saveState(); render(); el('settingsModal').close();
   });
-  document.getElementById('closeCalcBtn').addEventListener('click', () => {
-    drawer.classList.remove('open');
+
+  el('updatePinBtn').addEventListener('click', () => {
+    const cur = el('currentPin').value, nw = el('newPin').value;
+    if (S.pin && cur !== S.pin) { el('pinStatus').textContent = 'Current PIN incorrect'; return; }
+    if (nw && (nw.length !== 4 || !/^\d+$/.test(nw))) { el('pinStatus').textContent = 'PIN must be 4 digits'; return; }
+    S.pin = nw || null; el('pinStatus').textContent = nw ? 'PIN updated' : 'PIN removed'; saveState();
   });
-  
-  // Add score to calculator (new structure)
-  document.addEventListener('click', (e) => {
-    if (e.target.matches('[data-action="add-score"]')) {
-      const input = e.target.previousElementSibling;
-      const score = Number(input.value);
-      const kidId = e.target.dataset.kid;
-      const subject = e.target.dataset.subject;
-      const category = e.target.dataset.category;
-      
-      if (isNaN(score) || score < 0 || score > 100) {
-        alert('Please enter a valid score (0-100)');
-        return;
-      }
-      
-      const kid = state.kids.find(k => k.id === kidId);
-      if (kid && kid.gradeCalc && kid.gradeCalc[subject] && kid.gradeCalc[subject][category]) {
-        kid.gradeCalc[subject][category].push(score);
-        input.value = '';
-        addLog(`Added ${score}% to ${subject} ${category} for ${kid.name}`);
-        renderCalculator();
-        save();
-      }
-    }
+
+  el('pinSubmit').addEventListener('click', () => {
+    if (el('parentPin').value === S.pin) { el('pinModal').close(); if (pinPending) { pinPending(); pinPending = null; } }
+    else { el('parentPin').value = ''; alert('Incorrect PIN'); }
   });
-  
-  // Update calculator when kid or subject changes
-  document.getElementById('calcKidSelect')?.addEventListener('change', renderCalculator);
-  document.getElementById('calcSubjectSelect')?.addEventListener('change', renderCalculator);
-  document.getElementById('targetGradeSelect')?.addEventListener('change', () => {
-    const kidSelect = document.getElementById('calcKidSelect');
-    const subjectSelect = document.getElementById('calcSubjectSelect');
-    const kid = state.kids.find(k => k.id === kidSelect.value);
-    const subjectData = kid?.gradeCalc?.[subjectSelect.value];
-    const weights = { tests: 40, quizzes: 30, homework: 30 };
-    
-    if (kid && subjectData) {
-      calculateWhatDoINeed(kid, subjectSelect.value, subjectData, weights);
-    }
+  el('pinCancel').addEventListener('click', () => { el('pinModal').close(); pinPending = null; });
+
+  el('displayToggle').addEventListener('click', async () => {
+    try { if (!document.fullscreenElement) await document.documentElement.requestFullscreen(); else await document.exitFullscreen(); } catch(e) {}
   });
-  document.getElementById('targetCategorySelect')?.addEventListener('change', () => {
-    const kidSelect = document.getElementById('calcKidSelect');
-    const subjectSelect = document.getElementById('calcSubjectSelect');
-    const kid = state.kids.find(k => k.id === kidSelect.value);
-    const subjectData = kid?.gradeCalc?.[subjectSelect.value];
-    const weights = { tests: 40, quizzes: 30, homework: 30 };
-    
-    if (kid && subjectData) {
-      calculateWhatDoINeed(kid, subjectSelect.value, subjectData, weights);
-    }
+
+  el('exportBtn').addEventListener('click', async () => {
+    const pass = el('passphrase').value; if (!pass) { alert('Enter a passphrase'); return; }
+    try {
+      const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+      const km  = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+      const key = await crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:100000, hash:'SHA-256' }, km, { name:'AES-GCM', length:256 }, false, ['encrypt']);
+      const ct  = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(S)));
+      const b64 = b => btoa(String.fromCharCode(...new Uint8Array(b)));
+      el('blobArea').value = JSON.stringify({ v:1, s:b64(salt), i:b64(iv), d:b64(ct), t:new Date().toISOString() }, null, 2);
+      log('Data exported');
+    } catch(e) { alert('Export failed: ' + e.message); }
   });
-  
-  // Sparkline toggle
-  document.getElementById('sparklineBtn').addEventListener('click', () => {
-    const spark = document.getElementById('miniSpark');
-    spark.style.display = spark.style.display === 'none' ? 'block' : 'none';
-    if (spark.style.display === 'block') {
-      updateMiniSparkline();
-    }
+
+  el('importBtn').addEventListener('click', async () => {
+    const pass = el('passphrase').value; if (!pass) { alert('Enter a passphrase'); return; }
+    try {
+      const pkg = JSON.parse(el('blobArea').value);
+      const b64d = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+      const salt = b64d(pkg.s), iv = b64d(pkg.i), ct = b64d(pkg.d);
+      const km  = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+      const key = await crypto.subtle.deriveKey({ name:'PBKDF2', salt, iterations:100000, hash:'SHA-256' }, km, { name:'AES-GCM', length:256 }, false, ['decrypt']);
+      const pt  = await crypto.subtle.decrypt({ name:'AES-GCM', iv }, key, ct);
+      const imp = JSON.parse(new TextDecoder().decode(pt));
+      if (!imp.kids || !Array.isArray(imp.kids)) throw new Error('Invalid data');
+      S = imp; saveState(); render(); el('settingsModal').close(); alert('Import successful!');
+    } catch(e) { alert('Import failed - wrong passphrase or corrupt file'); }
   });
-  
-  // Display mode
-  document.getElementById('displayToggle').addEventListener('click', async () => {
-    state.displayMode = !state.displayMode;
-    document.body.classList.toggle('display-mode', state.displayMode);
-    document.body.classList.toggle('hide-cursor', state.displayMode);
-    
-    if (state.displayMode) {
-      try {
-        await document.documentElement.requestFullscreen();
-      } catch (e) {
-        console.log('Fullscreen not supported:', e);
-      }
-    } else if (document.fullscreenElement) {
-      try {
-        await document.exitFullscreen();
-      } catch (e) {
-        console.log('Exit fullscreen error:', e);
-      }
-    }
-    
-    addLog(`Display mode ${state.displayMode ? 'ON' : 'OFF'}`);
-    save();
+
+  el('clearBtn').addEventListener('click', () => {
+    if (!confirm('Clear ALL data? Cannot be undone.')) return;
+    S = defaultState(); localStorage.removeItem(STORAGE_KEY); saveState(); render();
   });
-  
-  // Settings modal
-  const settingsModal = document.getElementById('settingsModal');
-  document.getElementById('settingsBtn').addEventListener('click', () => {
-    // Clear PIN fields when opening settings
-    document.getElementById('currentPin').value = '';
-    document.getElementById('newPin').value = '';
-    document.getElementById('pinStatus').textContent = '';
-    settingsModal.showModal();
-  });
-  document.getElementById('settingsClose').addEventListener('click', () => {
-    settingsModal.close();
-  });
-  
-  // PIN update
-  document.getElementById('updatePinBtn').addEventListener('click', () => {
-    const currentPin = document.getElementById('currentPin').value;
-    const newPin = document.getElementById('newPin').value;
-    const pinStatus = document.getElementById('pinStatus');
-    
-    if (!currentPin) {
-      pinStatus.textContent = 'Please enter current PIN';
-      pinStatus.style.color = 'var(--danger)';
-      return;
-    }
-    
-    if (currentPin !== state.config.parentPin) {
-      pinStatus.textContent = 'Current PIN is incorrect';
-      pinStatus.style.color = 'var(--danger)';
-      return;
-    }
-    
-    if (newPin && (newPin.length !== 4 || !/^\d+$/.test(newPin))) {
-      pinStatus.textContent = 'New PIN must be 4 digits or empty to remove';
-      pinStatus.style.color = 'var(--danger)';
-      return;
-    }
-    
-    // Update or remove PIN
-    state.config.parentPin = newPin || null; // Default if empty (changed from '1234' to null)
-    save();
-    
-    pinStatus.textContent = newPin ? 'PIN updated successfully' : 'PIN removed';
-    pinStatus.style.color = 'var(--ok)';
-    
-    // Clear fields
-    document.getElementById('currentPin').value = '';
-    document.getElementById('newPin').value = '';
-    
-    addLog(`Parent PIN ${newPin ? 'updated' : 'removed'}`);
-  });
-  
-  // Export/Import
-  document.getElementById('exportBtn').addEventListener('click', exportData);
-  document.getElementById('importBtn').addEventListener('click', importData);
-  document.getElementById('clearBtn').addEventListener('click', clearData);
-  document.getElementById('resetAppBtn').addEventListener('click', resetApp);
-  
-  // Log buttons
-  document.getElementById('clearLogBtn').addEventListener('click', () => {
-    if (confirm('Clear logs older than 7 days?')) {
-      const weekAgo = now() - (7 * 24 * 60 * 60 * 1000);
-      state.logs = state.logs.filter(log => {
-        // Parse timestamp from log entry (format: "MM/DD/YYYY, HH:MM:SS AM/PM: message")
-        try {
-          const timestampMatch = log.match(/^(\d{1,2}\/\d{1,2}\/\d{4}, \d{1,2}:\d{2}:\d{2} (?:AM|PM))/);
-          if (timestampMatch) {
-            const logDate = new Date(timestampMatch[1]);
-            return logDate.getTime() >= weekAgo;
-          }
-          // If we can't parse the timestamp, keep the log (safer)
-          return true;
-        } catch (e) {
-          // If parsing fails, keep the log
-          return true;
-        }
-      });
-      addLog('Cleared logs older than 7 days');
-      render();
-    }
-  });
-  
-  document.getElementById('exportLogBtn').addEventListener('click', () => {
-    const logText = state.logs.join('\n');
-    const blob = new Blob([logText], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
+
+  el('clearLogBtn').addEventListener('click', () => { S.logs = []; saveState(); render(); });
+  el('exportLogBtn').addEventListener('click', () => {
     const a = document.createElement('a');
-    a.href = url;
-    a.download = `famboard-logs-${new Date().toISOString().slice(0,10)}.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
-    addLog('Exported logs');
-  });
-  
-  // PIN gate
-  document.getElementById('pinBtn').addEventListener('click', () => {
-    const pin = document.getElementById('pinInput').value;
-    // If parentPin is null, allow any PIN (no PIN set)
-    if (state.config.parentPin === null || pin === state.config.parentPin) {
-      document.querySelector('.controls').classList.remove('interactive');
-      document.getElementById('pinInput').value = '';
-      addLog('PIN verified - controls unlocked');
-    } else {
-      alert('Incorrect PIN');
-    }
+    a.href = URL.createObjectURL(new Blob([S.logs.join('\n')], { type:'text/plain' }));
+    a.download = 'famboard-log.txt'; a.click();
   });
 }
 
-// PIN Modal
-function showPinModal() {
-  const modal = document.getElementById('pinModal');
-  const input = document.getElementById('parentPin');
-  input.value = '';
-  modal.showModal();
-  
-  document.getElementById('pinCancel').onclick = () => {
-    modal.close();
-    pendingPinAction = null;
-  };
-  
-  document.getElementById('pinSubmit').onclick = () => {
-    const pin = input.value;
-    // If parentPin is null, allow any PIN (no PIN set)
-    if (state.config.parentPin === null || pin === state.config.parentPin) {
-      executePinAction();
-      modal.close();
-    } else {
-      alert('Incorrect PIN');
-      input.value = '';
-      input.focus();
-    }
-  };
-}
-
-function executePinAction() {
-  if (!pendingPinAction) return;
-  
-  const { action, choreId } = pendingPinAction;
-  const chore = state.chores.find(c => c.id === choreId);
-  if (!chore) return;
-  
-  const oldStatus = chore.status;
-  
-  if (action === 'approve') {
-    // For approve: mark as approved and ask about extra credit
-    chore.status = 'approved';
-    
-    // Ask about extra credit
-    const extraPoints = prompt(`Approve "${chore.name}". Add extra credit points? (Enter 0 for none):`, "0");
-    if (extraPoints !== null) {
-      const points = parseInt(extraPoints) || 0;
-      if (points > 0) {
-        chore.extra = {
-          enabled: true,
-          points: points
-        };
-        addLog(`Parent approved "${chore.name}" with +${points} extra points`);
-      } else {
-        chore.extra = { enabled: false, points: 0 };
-        addLog(`Parent approved "${chore.name}"`);
-      }
-    } else {
-      // User cancelled, don't approve
-      chore.status = oldStatus;
-      pendingPinAction = null;
-      return;
-    }
-    
-    confetti();
-  } else {
-    // For reject: mark as rejected
-    chore.status = 'rejected';
-    
-    addLog(`Parent rejected "${chore.name}"`);
-  }
-  
-  pendingPinAction = null;
-  render();
-}
-
-// Encryption functions
-async function deriveKey(passphrase, salt) {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    enc.encode(passphrase),
-    'PBKDF2',
-    false,
-    ['deriveKey']
-  );
-  
-  return crypto.subtle.deriveKey(
-    {
-      name: 'PBKDF2',
-      salt,
-      iterations: 120000,
-      hash: 'SHA-256'
-    },
-    keyMaterial,
-    { name: 'AES-GCM', length: 256 },
-    false,
-    ['encrypt', 'decrypt']
-  );
-}
-
-const b64encode = (buffer) => btoa(String.fromCharCode(...new Uint8Array(buffer)));
-const b64decode = (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0));
-
-// Export data
-async function exportData() {
-  const passphrase = document.getElementById('passphrase').value;
-  if (!passphrase) {
-    alert('Please enter a passphrase');
-    return;
-  }
-  
-  try {
-    const salt = crypto.getRandomValues(new Uint8Array(16));
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const key = await deriveKey(passphrase, salt);
-    
-    const payload = new TextEncoder().encode(JSON.stringify(state));
-    const ciphertext = await crypto.subtle.encrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      payload
-    );
-    
-    const exportData = {
-      v: 1,
-      s: b64encode(salt),
-      i: b64encode(iv),
-      d: b64encode(ciphertext),
-      t: new Date().toISOString()
-    };
-    
-    document.getElementById('blobArea').value = JSON.stringify(exportData, null, 2);
-    state.lastExport = now();
-    addLog('Exported encrypted data');
-    save();
-    
-  } catch (error) {
-    console.error('Export error:', error);
-    alert('Export failed: ' + error.message);
-  }
-}
-
-// Import data
-async function importData() {
-  const passphrase = document.getElementById('passphrase').value;
-  if (!passphrase) {
-    alert('Please enter a passphrase');
-    return;
-  }
-  
-  try {
-    const blobText = document.getElementById('blobArea').value.trim();
-    if (!blobText) {
-      alert('Please paste encrypted data');
-      return;
-    }
-    
-    const importData = JSON.parse(blobText);
-    const salt = b64decode(importData.s);
-    const iv = b64decode(importData.i);
-    const ciphertext = b64decode(importData.d);
-    
-    const key = await deriveKey(passphrase, salt);
-    const plaintext = await crypto.subtle.decrypt(
-      { name: 'AES-GCM', iv },
-      key,
-      ciphertext
-    );
-    
-    const importedState = JSON.parse(new TextDecoder().decode(plaintext));
-    
-    // Validate structure
-    if (!importedState.version || !importedState.kids || !Array.isArray(importedState.kids)) {
-      throw new Error('Invalid data format');
-    }
-    
-    // Merge with current config
-    state = { ...state, ...importedState };
-    save();
-    addLog(`Imported data from ${importData.t || 'unknown date'}`);
-    render();
-    
-    alert('Import successful!');
-    
-  } catch (error) {
-    console.error('Import error:', error);
-    alert('Import failed: ' + error.message);
-  }
-}
-
-// Clear data
-function clearData() {
-  if (!confirm('Clear ALL data? This cannot be undone.')) return;
-  
-  state = stateDefault();
-  save();
-  addLog('Cleared all data');
-  render();
-  alert('Data cleared');
-}
-
-// Reset app (clear localStorage and reload)
-function resetApp() {
-  if (!confirm('Reset the entire app? This will clear ALL data and reload the page.')) return;
-  
-  localStorage.clear();
-  addLog('App reset - localStorage cleared');
-  // Reload the page
-  window.location.reload();
-}
-
-// Update data size display
-function updateDataSize() {
-  try {
-    const data = JSON.stringify(state);
-    const sizeKB = (data.length / 1024).toFixed(2);
-    document.getElementById('dataSize').textContent = `${sizeKB} KB`;
-  } catch (e) {
-    document.getElementById('dataSize').textContent = 'Error';
-  }
-}
-
-// Update mini sparkline
-function updateMiniSparkline() {
-  const kid1 = state.kids.find(k => k.id === 'kid1');
-  if (!kid1) return;
-  
-  const svg = document.getElementById('miniSpark');
-  const data = kid1.gradeHistory.slice(-8); // Last 8 grades
-  if (data.length < 2) return;
-  
-  const width = 300;
-  const height = 60;
-  const min = Math.min(...data, 60);
-  const max = Math.max(...data, 100);
-  
-  const points = data.map((value, index) => {
-    const x = (index * width) / Math.max(1, data.length - 1);
-    const y = height - ((value - min) / Math.max(1, max - min)) * (height - 10);
-    return `${x},${y}`;
-  }).join(' ');
-  
-  svg.innerHTML = `
-    <polyline fill="none" stroke="#2be9ff" stroke-width="2" points="${points}" />
-  `;
-  svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-}
-
-// Clock
 function startClock() {
-  function updateClock() {
-    const now = new Date();
-    const timeString = now.toLocaleTimeString('en-US', { 
-      hour12: true, 
-      hour: '2-digit', 
-      minute: '2-digit',
-      second: '2-digit'
-    });
-    const dateString = now.toLocaleDateString('en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric'
-    });
-    document.getElementById('clock').textContent = `${dateString} ${timeString}`;
+  function tick() {
+    const n = new Date(), e = el('clock');
+    if (e) e.textContent = n.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' }) + ' ' + n.toLocaleTimeString('en-US', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
   }
-  
-  updateClock();
-  setInterval(updateClock, 1000);
+  tick(); setInterval(tick, 1000);
 }
 
-// Service Worker
-function setupServiceWorker() {
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(reg => {
-          console.log('Service Worker registered:', reg);
-          // Check for updates
-          reg.addEventListener('updatefound', () => {
-            const newWorker = reg.installing;
-            newWorker.addEventListener('statechange', () => {
-              if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                addLog('App update available. Refresh to update.');
-              }
-            });
-          });
-        })
-        .catch(err => console.error('Service Worker registration failed:', err));
-    });
-    
-    // Listen for messages from service worker
-    navigator.serviceWorker.addEventListener('message', event => {
-      if (event.data && event.data.type === 'CACHE_UPDATED') {
-        addLog('App cache updated');
-      }
-    });
-  }
+function registerSW() {
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(e => console.warn('SW:', e));
 }
 
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => init());
-} else {
-  init();
-}
-}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else init();
