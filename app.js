@@ -113,7 +113,7 @@ function kidPayout(kidIdx) {
   const val   = choreValue(kidIdx);
   const total = committedChores(kidIdx).length;
   // Start at base $20 — dock for each missed or rejected chore
-  const missed = S.chores.filter(c => c.kid === kidIdx && !c.extra && (c.status === 'none' || c.status === 'rejected')).length;
+  const missed = S.chores.filter(c => c.kid === kidIdx && !c.extra && c.status === 'rejected').length;
   const choreEarned = Math.max(0, S.base - (missed * val));
   // Extra credit earns above base (capped at $5)
   const extraEarned = Math.min(5, S.chores.filter(c => c.kid === kidIdx && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0));
