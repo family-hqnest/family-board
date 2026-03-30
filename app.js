@@ -367,7 +367,24 @@ function bindEvents() {
     S.kids.forEach((kid, i) => {
       SUBJECTS.forEach(s => { kid.subjects[s].baseline = kid.subjects[s].current; });
     });
-    S.chores = []; S.week = weekLabel(); log('New week started'); saveState(); render();
+    // Save recurring chores before clearing
+    const recurringTemplates = S.chores.filter(c => c.recurring);
+    S.chores = [];
+    // Reload recurring chores for new week
+    recurringTemplates.forEach(c => {
+      expandChore({
+        name: c.baseName || c.name.split(' - ')[0].split(' (')[0],
+        freq: c.freq || 'weekly',
+        kid: c.kid,
+        extra: c.extra || false,
+        bonusDollars: c.bonusDollars || 0,
+        dod: c.dod || '',
+        recurring: true
+      });
+    });
+    S.week = weekLabel();
+    log('New week started - ' + recurringTemplates.length + ' recurring chores reloaded');
+    saveState(); render();
   });
 
   el('openGradeBtn').addEventListener('click', () => {
