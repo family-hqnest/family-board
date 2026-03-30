@@ -144,9 +144,22 @@ function weekGuard() {
     kid.streak = (rec.length > 0 && rec.every(c => c.status === 'approved')) ? (kid.streak || 0) + 1 : 0;
     SUBJECTS.forEach(s => { kid.subjects[s].baseline = kid.subjects[s].current; });
   });
+  // Reload recurring chores for new week
+  const recurring = S.chores.filter(c => c.recurring);
   S.chores = [];
+  recurring.forEach(c => {
+    expandChore({
+      name: c.baseName || c.name,
+      freq: c.freq || 'weekly',
+      kid: c.kid,
+      extra: c.extra || false,
+      bonusDollars: c.bonusDollars || 0,
+      dod: c.dod || '',
+      recurring: true
+    });
+  });
   S.week = current;
-  log('New week started');
+  log('New week started - recurring chores reloaded');
   saveState();
 }
 
@@ -207,7 +220,10 @@ function render() {
     const extraEarned = Math.min(5, S.chores.filter(c => c.kid === i && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0));
     const gradeBonus  = gradeImprovementBonus(S.kids[i]);
     const growthPct   = gradeGrowthPct(S.kids[i]);
-    const pct         = Math.max(0, Math.min(100, (pay / S.maxPay) * 100));
+    // Bar: $20 is center (66.7%), $0 is left, $30 is right
+    const pct = pay <= S.base
+      ? (pay / S.base) * 66.7
+      : 66.7 + ((pay - S.base) / (S.maxPay - S.base)) * 33.3;
 
     el(n + 'Name').textContent         = S.names[i];
     el(n + 'PayoutVal').textContent    = money(pay);
@@ -260,8 +276,10 @@ function renderChores() {
     const recIcon  = c.recurring ? ' 🔁' : '';
     const extraIcon = c.extra ? ' ⭐' : '';
     const dodNote  = c.dod ? '<div class="small muted" style="margin-top:2px;font-style:italic">Done when: ' + c.dod + '</div>' : '';
+    const kidTagColor = c.kid === 0 ? '#ff69b4' : c.kid === 1 ? '#9b59b6' : '#888';
     const hrs      = c.submittedAt ? Math.floor((now() - c.submittedAt) / 3600000) : 0;
     const border   = c.status === 'approved' ? '#2ed573' : c.status === 'pending' ? '#ffa502' : c.status === 'rejected' ? '#ff4757' : '#333';
+    const kidClass = c.kid === 0 ? 'chore-sofia' : c.kid === 1 ? 'chore-juliana' : '';
     const statusLabel = c.status === 'none' ? '<span style="color:#555">Not done yet</span>'
       : c.status === 'pending'  ? '<span style="color:#ffa502">Waiting for approval (' + hrs + 'h ago)</span>'
       : c.status === 'approved' ? '<span style="color:#2ed573">Approved - earned ' + valLabel + '</span>'
@@ -269,7 +287,7 @@ function renderChores() {
     const actionBtns = c.status === 'none' ? '<button data-action="submit" data-id="' + c.id + '">Mark Done</button>'
       : c.status === 'pending' ? '<button data-action="approve" data-id="' + c.id + '" class="approve-btn">Approve</button><button data-action="reject" data-id="' + c.id + '" class="reject-btn">Reject</button>'
       : '<button data-action="reset" data-id="' + c.id + '">Reset</button>';
-    return '<div class="todo" style="border-left:3px solid ' + border + '" data-id="' + c.id + '"><div style="flex:1"><div><b>' + c.name + '</b>' + recIcon + extraIcon + ' <span class="small muted">(' + valLabel + ' - ' + kidEmoji + ' ' + kidName + ')</span></div>' + dodNote + '<div style="margin-top:3px">' + statusLabel + '</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + actionBtns + '<button data-action="delete" data-id="' + c.id + '" style="opacity:.4;font-size:.8rem;padding:4px 8px">X</button></div></div>';
+    return '<div class="todo ' + kidClass + '" style="border-left:3px solid ' + border + '" data-id="' + c.id + '"><div style="flex:1"><div><b>' + c.name + '</b>' + recIcon + extraIcon + ' <span class="small muted">(' + valLabel + ' - </span><span class="kid-tag" style="color:' + kidTagColor + ';font-size:.8rem">' + kidEmoji + ' ' + kidName + '</span><span class="small muted">)</span></div>' + dodNote + '<div style="margin-top:3px">' + statusLabel + '</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + actionBtns + '<button data-action="delete" data-id="' + c.id + '" style="opacity:.4;font-size:.8rem;padding:4px 8px">X</button></div></div>';
   }).join('');
 }
 
