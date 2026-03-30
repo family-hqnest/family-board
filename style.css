@@ -605,10 +605,12 @@ button.secondary:hover {
 
 /* Kid color coding for chores */
 .chore-sofia {
-  border-left: 3px solid #ff69b4 !important;
+  border-left: 6px solid #ff69b4 !important;
+  background: rgba(255, 105, 180, 0.05);
 }
 .chore-juliana {
-  border-left: 3px solid #9b59b6 !important;
+  border-left: 6px solid #9b59b6 !important;
+  background: rgba(155, 89, 182, 0.05);
 }
 .chore-sofia .kid-tag {
   color: #ff69b4;
