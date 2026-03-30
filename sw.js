@@ -1,4 +1,4 @@
-const CACHE_NAME = 'famboard-cache-v6';
+const CACHE_NAME = 'famboard-cache-v99';
 const ASSETS = [
   './',
   './index.html',
