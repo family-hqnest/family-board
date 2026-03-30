@@ -287,7 +287,7 @@ function renderChores() {
     const actionBtns = c.status === 'none' ? '<button data-action="submit" data-id="' + c.id + '">Mark Done</button>'
       : c.status === 'pending' ? '<button data-action="approve" data-id="' + c.id + '" class="approve-btn">Approve</button><button data-action="reject" data-id="' + c.id + '" class="reject-btn">Reject</button>'
       : '<button data-action="reset" data-id="' + c.id + '">Reset</button>';
-    return '<div class="todo ' + kidClass + '" style="border-left:3px solid ' + border + '" data-id="' + c.id + '"><div style="flex:1"><div><b>' + c.name + '</b>' + recIcon + extraIcon + ' <span class="small muted">(' + valLabel + ' - </span><span class="kid-tag" style="color:' + kidTagColor + ';font-size:.8rem">' + kidEmoji + ' ' + kidName + '</span><span class="small muted">)</span></div>' + dodNote + '<div style="margin-top:3px">' + statusLabel + '</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + actionBtns + '<button data-action="delete" data-id="' + c.id + '" style="opacity:.4;font-size:.8rem;padding:4px 8px">X</button></div></div>';
+    return '<div class="todo ' + kidClass + '" style="border-left:3px solid ' + border + '" data-id="' + c.id + '"><div style="flex:1"><div><b>' + c.name + '</b>' + recIcon + extraIcon + ' <span class="small muted">(' + valLabel + ' - </span><span class="kid-tag" style="color:' + kidTagColor + ';font-size:.8rem">' + kidEmoji + ' ' + kidName + '</span><span class="small muted">)</span></div>' + dodNote + '<div style="margin-top:3px">' + statusLabel + '</div></div><div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">' + actionBtns + '<button data-action="edit" data-id="' + c.id + '" style="opacity:.6;font-size:.8rem;padding:4px 8px">pencil</button><button data-action="delete" data-id="' + c.id + '" style="opacity:.4;font-size:.8rem;padding:4px 8px">X</button></div></div>';
   }).join('');
 }
 
@@ -307,6 +307,25 @@ function requirePin(onSuccess) {
   pinPending = onSuccess;
   el('parentPin').value = '';
   el('pinModal').showModal();
+}
+
+function openEditModal(chore) {
+  const baseName = chore.baseName || chore.name.split(' - ')[0].split(' (')[0];
+  const name = prompt('Chore name:', baseName);
+  if (name === null) return;
+  const dod = prompt('Done when:', chore.dod || '');
+  if (dod === null) return;
+  S.chores.forEach(c => {
+    const cBase = c.baseName || c.name.split(' - ')[0].split(' (')[0];
+    if (cBase === baseName && c.kid === chore.kid) {
+      const suffix = c.name.slice(baseName.length);
+      c.baseName = name;
+      c.name = name + suffix;
+      c.dod = dod;
+    }
+  });
+  log('Edited chore "' + baseName + '" to "' + name + '"');
+  saveState(); render();
 }
 
 function bindEvents() {
@@ -353,6 +372,7 @@ function bindEvents() {
     }
     if (action === 'reset') { chore.status = 'none'; chore.submittedAt = null; saveState(); render(); }
     if (action === 'delete') { S.chores = S.chores.filter(c => c.id !== id); saveState(); render(); }
+    if (action === 'edit') { openEditModal(chore); }
   });
 
   document.querySelectorAll('[data-filter]').forEach(btn => {
