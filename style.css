@@ -618,19 +618,3 @@ button.secondary:hover {
   color: #9b59b6;
   font-weight: 700;
 }
-
-/* Kid color coding for chores */
-.chore-sofia {
-  border-left: 3px solid #ff69b4 !important;
-}
-.chore-juliana {
-  border-left: 3px solid #9b59b6 !important;
-}
-.chore-sofia .kid-tag {
-  color: #ff69b4;
-  font-weight: 700;
-}
-.chore-juliana .kid-tag {
-  color: #9b59b6;
-  font-weight: 700;
-}
