@@ -179,6 +179,19 @@
     <button id="pinSubmit">Submit</button>
   </div>
 </dialog>
+
+<dialog id="editChoreModal">
+  <h3>✏️ Edit Chore</h3>
+  <p class="small muted">Update the name and completion standard.</p>
+  <label class="small" style="display:block;margin:12px 0 4px">Chore Name</label>
+  <input id="editChoreName" type="text" style="width:100%;margin-bottom:12px" placeholder="Chore name">
+  <label class="small" style="display:block;margin-bottom:4px">Done When</label>
+  <input id="editChoreDod" type="text" style="width:100%" placeholder="e.g. floor clear, bed made">
+  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+    <button id="editChoreCancel">Cancel</button>
+    <button id="editChoreSave">Save Changes</button>
+  </div>
+</dialog>
 <script src="./app.js"></script>
 </body>
 </html>

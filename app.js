@@ -319,7 +319,7 @@ function showUndoBanner() {
 
   const banner = document.createElement('div');
   banner.id = 'undoBanner';
-  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ff4757;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;font-family:inherit;font-weight:700;font-size:.95rem;box-shadow:0 4px 20px rgba(0,0,0,0.4)';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ff4757;color:#fff;padding:max(14px,env(safe-area-inset-top,14px)) 20px 14px;display:flex;align-items:center;justify-content:space-between;font-family:inherit;font-weight:700;font-size:.9rem;box-shadow:0 4px 20px rgba(0,0,0,0.4);flex-wrap:wrap;gap:8px';
   
   const msg = document.createElement('span');
   msg.id = 'undoCountdown';
@@ -361,21 +361,30 @@ function showUndoBanner() {
 
 function openEditModal(chore) {
   const baseName = chore.baseName || chore.name.split(' - ')[0].split(' (')[0];
-  const name = prompt('Chore name:', baseName);
-  if (name === null) return;
-  const dod = prompt('Done when:', chore.dod || '');
-  if (dod === null) return;
-  S.chores.forEach(c => {
-    const cBase = c.baseName || c.name.split(' - ')[0].split(' (')[0];
-    if (cBase === baseName && c.kid === chore.kid) {
-      const suffix = c.name.slice(baseName.length);
-      c.baseName = name;
-      c.name = name + suffix;
-      c.dod = dod;
-    }
-  });
-  log('Edited chore "' + baseName + '" to "' + name + '"');
-  saveState(); render();
+  const modal = document.getElementById('editChoreModal');
+  document.getElementById('editChoreName').value = baseName;
+  document.getElementById('editChoreDod').value = chore.dod || '';
+  modal.showModal();
+
+  document.getElementById('editChoreSave').onclick = () => {
+    const name = document.getElementById('editChoreName').value.trim();
+    const dod  = document.getElementById('editChoreDod').value.trim();
+    if (!name) { alert('Enter a chore name'); return; }
+    S.chores.forEach(c => {
+      const cBase = c.baseName || c.name.split(' - ')[0].split(' (')[0];
+      if (cBase === baseName && c.kid === chore.kid) {
+        const suffix = c.name.slice(baseName.length);
+        c.baseName = name;
+        c.name = name + suffix;
+        c.dod = dod;
+      }
+    });
+    log('Edited chore "' + baseName + '" to "' + name + '"');
+    saveState(); render();
+    modal.close();
+  };
+
+  document.getElementById('editChoreCancel').onclick = () => modal.close();
 }
 
 function bindEvents() {
@@ -431,7 +440,7 @@ function bindEvents() {
       if (existing) existing.remove();
       const banner = document.createElement('div');
       banner.id = 'deleteBanner';
-      banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#333;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;font-family:inherit;font-weight:600;font-size:.9rem;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.5);white-space:nowrap';
+      banner.style.cssText = 'position:fixed;bottom:max(20px,env(safe-area-inset-bottom,20px));left:16px;right:16px;z-index:9999;background:#333;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:12px;font-family:inherit;font-weight:600;font-size:.9rem;border-radius:14px;box-shadow:0 4px 20px rgba(0,0,0,0.5)';
       const msg = document.createElement('span');
       msg.textContent = 'Deleted "' + choreName + '"';
       const btn = document.createElement('button');
