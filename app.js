@@ -421,7 +421,32 @@ function bindEvents() {
       requirePin(() => { chore.status = 'rejected'; log('Rejected "' + chore.name + '"'); saveState(); render(); });
     }
     if (action === 'reset') { chore.status = 'none'; chore.submittedAt = null; saveState(); render(); }
-    if (action === 'delete') { S.chores = S.chores.filter(c => c.id !== id); saveState(); render(); }
+    if (action === 'delete') {
+      const snapshot = JSON.stringify(S);
+      const choreName = chore.name;
+      S.chores = S.chores.filter(c => c.id !== id);
+      saveState(); render();
+      // Show undo banner
+      const existing = document.getElementById('deleteBanner');
+      if (existing) existing.remove();
+      const banner = document.createElement('div');
+      banner.id = 'deleteBanner';
+      banner.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:9999;background:#333;color:#fff;padding:12px 20px;display:flex;align-items:center;gap:12px;font-family:inherit;font-weight:600;font-size:.9rem;border-radius:12px;box-shadow:0 4px 20px rgba(0,0,0,0.5);white-space:nowrap';
+      const msg = document.createElement('span');
+      msg.textContent = 'Deleted "' + choreName + '"';
+      const btn = document.createElement('button');
+      btn.textContent = '↩ Undo';
+      btn.style.cssText = 'background:#ffa502;color:#111;border:none;padding:6px 14px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem;font-family:inherit';
+      btn.onclick = () => {
+        S = JSON.parse(snapshot);
+        saveState(); render();
+        banner.remove();
+      };
+      banner.appendChild(msg);
+      banner.appendChild(btn);
+      document.body.appendChild(banner);
+      setTimeout(() => { if (document.getElementById('deleteBanner')) banner.remove(); }, 15000);
+    }
     if (action === 'edit') { openEditModal(chore); }
   });
 
