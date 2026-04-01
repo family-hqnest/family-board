@@ -125,6 +125,8 @@ function kidPayout(kidIdx) {
 let S = defaultState();
 let filterActive = 'all';
 let pinPending = null;
+let weekSnapshot = null;
+let undoTimer = null;
 
 async function init() {
   S = await loadState();
@@ -309,6 +311,54 @@ function requirePin(onSuccess) {
   el('pinModal').showModal();
 }
 
+function showUndoBanner() {
+  // Remove existing banner if any
+  const existing = document.getElementById('undoBanner');
+  if (existing) existing.remove();
+  clearTimeout(undoTimer);
+
+  const banner = document.createElement('div');
+  banner.id = 'undoBanner';
+  banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;background:#ff4757;color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;font-family:inherit;font-weight:700;font-size:.95rem;box-shadow:0 4px 20px rgba(0,0,0,0.4)';
+  
+  const msg = document.createElement('span');
+  msg.id = 'undoCountdown';
+  msg.textContent = 'New week started. Undo available for 30 seconds...';
+  
+  const btn = document.createElement('button');
+  btn.textContent = '↩ Undo New Week';
+  btn.style.cssText = 'background:#fff;color:#ff4757;border:none;padding:8px 16px;border-radius:8px;font-weight:700;cursor:pointer;font-size:.9rem;font-family:inherit';
+  btn.onclick = () => {
+    if (weekSnapshot) {
+      S = JSON.parse(weekSnapshot);
+      saveState();
+      render();
+      log('New week undone — restored previous state');
+    }
+    clearTimeout(undoTimer);
+    banner.remove();
+    weekSnapshot = null;
+  };
+
+  banner.appendChild(msg);
+  banner.appendChild(btn);
+  document.body.appendChild(banner);
+
+  // Countdown
+  let secs = 30;
+  const interval = setInterval(() => {
+    secs--;
+    const el = document.getElementById('undoCountdown');
+    if (el) el.textContent = 'New week started. Undo available for ' + secs + ' seconds...';
+    if (secs <= 0) clearInterval(interval);
+  }, 1000);
+
+  undoTimer = setTimeout(() => {
+    banner.remove();
+    weekSnapshot = null;
+  }, 30000);
+}
+
 function openEditModal(chore) {
   const baseName = chore.baseName || chore.name.split(' - ')[0].split(' (')[0];
   const name = prompt('Chore name:', baseName);
@@ -383,28 +433,30 @@ function bindEvents() {
   });
 
   el('newWeekBtn').addEventListener('click', () => {
-    if (!confirm('Start a new week? All chores clear. Baselines update.')) return;
-    S.kids.forEach((kid, i) => {
-      SUBJECTS.forEach(s => { kid.subjects[s].baseline = kid.subjects[s].current; });
-    });
-    // Save recurring chores before clearing
-    const recurringTemplates = S.chores.filter(c => c.recurring);
-    S.chores = [];
-    // Reload recurring chores for new week
-    recurringTemplates.forEach(c => {
-      expandChore({
-        name: c.baseName || c.name.split(' - ')[0].split(' (')[0],
-        freq: c.freq || 'weekly',
-        kid: c.kid,
-        extra: c.extra || false,
-        bonusDollars: c.bonusDollars || 0,
-        dod: c.dod || '',
-        recurring: true
+    requirePin(() => {
+      if (!confirm('Start a new week? All chores clear. Baselines update. You have 30 seconds to undo.')) return;
+      weekSnapshot = JSON.stringify(S);
+      S.kids.forEach((kid, i) => {
+        SUBJECTS.forEach(s => { kid.subjects[s].baseline = kid.subjects[s].current; });
       });
+      const recurringTemplates = S.chores.filter(c => c.recurring);
+      S.chores = [];
+      recurringTemplates.forEach(c => {
+        expandChore({
+          name: c.baseName || c.name.split(' - ')[0].split(' (')[0],
+          freq: c.freq || 'weekly',
+          kid: c.kid,
+          extra: c.extra || false,
+          bonusDollars: c.bonusDollars || 0,
+          dod: c.dod || '',
+          recurring: true
+        });
+      });
+      S.week = weekLabel();
+      log('New week started - ' + recurringTemplates.length + ' recurring chores reloaded');
+      saveState(); render();
+      showUndoBanner();
     });
-    S.week = weekLabel();
-    log('New week started - ' + recurringTemplates.length + ' recurring chores reloaded');
-    saveState(); render();
   });
 
   el('openGradeBtn').addEventListener('click', () => {
