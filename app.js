@@ -369,16 +369,19 @@ function renderBank() {
   const list = document.getElementById('bankList');
   if (!list) return;
   if (!S.bank || S.bank.length === 0) {
-    list.innerHTML = '<div class="muted small" style="padding:12px;text-align:center">No chores in bank yet. Add chores above and save to bank.</div>';
+    list.innerHTML = '<div class="muted small" style="padding:12px;text-align:center">No chores in bank yet. Add chores above and check Save to Bank.</div>';
     return;
   }
   list.innerHTML = S.bank.map((b, i) => {
-    const kidName  = b.kid === 0 ? S.names[0] : b.kid === 1 ? S.names[1] : 'Shared';
-    const kidColor = b.kid === 0 ? '#ff69b4' : b.kid === 1 ? '#9b59b6' : '#888';
     const freqLabel = b.freq === 'daily' ? '📅 Daily' : b.freq === 'twice-weekly' ? '📅 2x/wk' : '📆 Weekly';
     const dodNote = b.dod ? '<div class="small muted" style="font-style:italic">' + b.dod + '</div>' : '';
-    return '<div class="todo" style="border-left:3px solid ' + kidColor + '">' +
-      '<div style="flex:1"><div><b>' + b.name + '</b> <span class="small muted">(' + freqLabel + ' - <span style="color:' + kidColor + '">' + kidName + '</span>)</span></div>' + dodNote + '</div>' +
+    return '<div class="todo" style="border-left:3px solid #ffa502;margin-bottom:8px">' +
+      '<div style="flex:1"><div><b>' + b.name + '</b> <span class="small muted">(' + freqLabel + ')</span></div>' + dodNote + '</div>' +
+      '<select id="bankKid_' + i + '" style="width:110px;font-size:.8rem;padding:5px 8px">' +
+        '<option value="0">🧒 ' + S.names[0] + '</option>' +
+        '<option value="1">👩 ' + S.names[1] + '</option>' +
+        '<option value="shared">👨‍👩‍👧 Shared</option>' +
+      '</select>' +
       '<button data-bank-add="' + i + '" style="background:rgba(46,213,115,0.15);border-color:rgba(46,213,115,0.3);color:#2ed573;font-size:.8rem">+ Add to Week</button>' +
       '<button data-bank-del="' + i + '" style="opacity:.4;font-size:.8rem;padding:4px 8px">X</button>' +
       '</div>';
@@ -441,7 +444,7 @@ function bindEvents() {
     log('Added "' + name + '" (' + freq + ', ' + instances + ' instance' + (instances > 1 ? 's' : '') + ') for ' + (kidIdx === 'shared' ? 'shared' : S.names[kidIdx]));
     // Also save to bank if checkbox checked
     if (el('saveToBankCheck') && el('saveToBankCheck').checked) {
-      addToBank({ name, freq, kid: kidIdx, extra: isExtra, bonusDollars: bonus, dod, recurring: rec });
+      addToBank({ name, freq, extra: isExtra, bonusDollars: bonus, dod, recurring: rec });
       el('saveToBankCheck').checked = false;
     }
     saveState(); render();
@@ -454,8 +457,11 @@ function bindEvents() {
     if (addBtn) {
       const idx = parseInt(addBtn.dataset.bankAdd);
       const b = S.bank[idx];
-      expandChore({ name: b.name, freq: b.freq, kid: b.kid, extra: b.extra || false, bonusDollars: b.bonusDollars || 0, dod: b.dod || '', recurring: b.recurring || false });
-      log('Added "' + b.name + '" from bank');
+      const kidSel = document.getElementById('bankKid_' + idx);
+      const kidVal = kidSel ? kidSel.value : 'shared';
+      const kidIdx = kidVal === 'shared' ? 'shared' : parseInt(kidVal);
+      expandChore({ name: b.name, freq: b.freq, kid: kidIdx, extra: b.extra || false, bonusDollars: b.bonusDollars || 0, dod: b.dod || '', recurring: b.recurring || false });
+      log('Added "' + b.name + '" from bank for ' + (kidIdx === 'shared' ? 'shared' : S.names[kidIdx]));
       saveState(); render();
     }
     if (delBtn) {
