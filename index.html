@@ -88,6 +88,9 @@
         <label style="display:flex;align-items:center;gap:6px;font-size:.85rem">
           <input type="checkbox" id="choreExtra"> ⭐ Extra credit
         </label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem">
+          <input type="checkbox" id="saveToBankCheck"> 🏦 Save to Bank
+        </label>
       </div>
       <div id="bonusDollarsRow" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center">
         <label class="small">Bonus ($):</label>
@@ -104,9 +107,17 @@
         <button data-filter="approved">Approved</button>
         <button data-filter="kid1">Sofia</button>
         <button data-filter="kid2">Juliana</button>
+        <button data-filter="notdone">Not Done</button>
+        <button data-filter="rejected">Rejected</button>
       </div>
       <div id="choreList"></div>
     </article>
+    <article class="card">
+      <h2>🏦 Chore Bank</h2>
+      <p class="small muted" style="margin-bottom:12px">Your saved chores. Tap "+ Add to Week" to activate for this week.</p>
+      <div id="bankList"></div>
+    </article>
+
     <article class="card">
       <h2>📅 Week Control</h2>
       <div class="small">Week: <span id="weekKey">-</span></div>

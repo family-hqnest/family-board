@@ -22,7 +22,8 @@ function defaultState() {
     pin:    null,
     kids:   [makeKid(), makeKid()],
     chores: [],
-    logs:   []
+    logs:   [],
+    bank:   []
   };
 }
 
@@ -139,6 +140,8 @@ async function init() {
 }
 
 function weekGuard() {
+  // Auto-reset disabled — week only resets on manual New Week button
+  return;
   const current = weekLabel();
   if (S.week === current) return;
   S.kids.forEach((kid, i) => {
@@ -255,6 +258,7 @@ function render() {
   }).join('');
 
   renderChores();
+  renderBank();
 
   const act = el('activity');
   if (act) act.innerHTML = (S.logs || []).slice(0, 10).map(l => '<div class="small muted" style="padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05)">* ' + l + '</div>').join('') || '<span class="muted small">No activity yet.</span>';
@@ -266,6 +270,8 @@ function renderChores() {
   let chores = [...S.chores];
   if (filterActive === 'pending')  chores = chores.filter(c => c.status === 'pending');
   if (filterActive === 'approved') chores = chores.filter(c => c.status === 'approved');
+  if (filterActive === 'notdone')  chores = chores.filter(c => c.status === 'none');
+  if (filterActive === 'rejected') chores = chores.filter(c => c.status === 'rejected');
   if (filterActive === 'kid1')     chores = chores.filter(c => c.kid === 0);
   if (filterActive === 'kid2')     chores = chores.filter(c => c.kid === 1);
   if (chores.length === 0) { list.innerHTML = '<div class="muted" style="text-align:center;padding:20px">No chores here yet!</div>'; return; }
@@ -359,6 +365,37 @@ function showUndoBanner() {
   }, 30000);
 }
 
+function renderBank() {
+  const list = document.getElementById('bankList');
+  if (!list) return;
+  if (!S.bank || S.bank.length === 0) {
+    list.innerHTML = '<div class="muted small" style="padding:12px;text-align:center">No chores in bank yet. Add chores above and save to bank.</div>';
+    return;
+  }
+  list.innerHTML = S.bank.map((b, i) => {
+    const kidName  = b.kid === 0 ? S.names[0] : b.kid === 1 ? S.names[1] : 'Shared';
+    const kidColor = b.kid === 0 ? '#ff69b4' : b.kid === 1 ? '#9b59b6' : '#888';
+    const freqLabel = b.freq === 'daily' ? '📅 Daily' : b.freq === 'twice-weekly' ? '📅 2x/wk' : '📆 Weekly';
+    const dodNote = b.dod ? '<div class="small muted" style="font-style:italic">' + b.dod + '</div>' : '';
+    return '<div class="todo" style="border-left:3px solid ' + kidColor + '">' +
+      '<div style="flex:1"><div><b>' + b.name + '</b> <span class="small muted">(' + freqLabel + ' - <span style="color:' + kidColor + '">' + kidName + '</span>)</span></div>' + dodNote + '</div>' +
+      '<button data-bank-add="' + i + '" style="background:rgba(46,213,115,0.15);border-color:rgba(46,213,115,0.3);color:#2ed573;font-size:.8rem">+ Add to Week</button>' +
+      '<button data-bank-del="' + i + '" style="opacity:.4;font-size:.8rem;padding:4px 8px">X</button>' +
+      '</div>';
+  }).join('');
+}
+
+function addToBank(def) {
+  if (!S.bank) S.bank = [];
+  // Avoid duplicates
+  const exists = S.bank.some(b => b.name === def.name && b.kid === def.kid);
+  if (exists) { alert('"' + def.name + '" is already in the bank'); return; }
+  S.bank.push(def);
+  log('Added "' + def.name + '" to chore bank');
+  saveState();
+  renderBank();
+}
+
 function openEditModal(chore) {
   const baseName = chore.baseName || chore.name.split(' - ')[0].split(' (')[0];
   const modal = document.getElementById('editChoreModal');
@@ -402,7 +439,32 @@ function bindEvents() {
     el('choreName').value = ''; el('choreDod').value = '';
     const instances = freq === 'daily' ? 7 : freq === 'twice-weekly' ? 2 : 1;
     log('Added "' + name + '" (' + freq + ', ' + instances + ' instance' + (instances > 1 ? 's' : '') + ') for ' + (kidIdx === 'shared' ? 'shared' : S.names[kidIdx]));
+    // Also save to bank if checkbox checked
+    if (el('saveToBankCheck') && el('saveToBankCheck').checked) {
+      addToBank({ name, freq, kid: kidIdx, extra: isExtra, bonusDollars: bonus, dod, recurring: rec });
+      el('saveToBankCheck').checked = false;
+    }
     saveState(); render();
+  });
+
+  // Bank list actions
+  document.addEventListener('click', e => {
+    const addBtn = e.target.closest('[data-bank-add]');
+    const delBtn = e.target.closest('[data-bank-del]');
+    if (addBtn) {
+      const idx = parseInt(addBtn.dataset.bankAdd);
+      const b = S.bank[idx];
+      expandChore({ name: b.name, freq: b.freq, kid: b.kid, extra: b.extra || false, bonusDollars: b.bonusDollars || 0, dod: b.dod || '', recurring: b.recurring || false });
+      log('Added "' + b.name + '" from bank');
+      saveState(); render();
+    }
+    if (delBtn) {
+      const idx = parseInt(delBtn.dataset.bankDel);
+      const name = S.bank[idx].name;
+      S.bank.splice(idx, 1);
+      log('Removed "' + name + '" from bank');
+      saveState(); renderBank();
+    }
   });
 
   el('choreExtra').addEventListener('change', () => {
