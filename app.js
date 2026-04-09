@@ -638,8 +638,10 @@ function bindEvents() {
   });
 
   el('clearBtn').addEventListener('click', () => {
-    if (!confirm('Clear ALL data? Cannot be undone.')) return;
-    S = defaultState(); localStorage.removeItem(STORAGE_KEY); saveState(); render();
+    requirePin(() => {
+      if (!confirm('Clear ALL data? This cannot be undone.')) return;
+      S = defaultState(); localStorage.removeItem(STORAGE_KEY); saveState(); render();
+    });
   });
 
   el('clearLogBtn').addEventListener('click', () => { S.logs = []; saveState(); render(); });
