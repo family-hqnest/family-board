@@ -488,14 +488,12 @@ function bindEvents() {
       saveState(); render();
     }
     if (action === 'approve') {
-      requirePin(() => {
-        chore.status = 'approved';
-        if (typeof chore.kid === 'number') S.kids[chore.kid].xp = (S.kids[chore.kid].xp || 0) + 1;
-        log('Approved "' + chore.name + '"'); confetti(); saveState(); render();
-      });
+      chore.status = 'approved';
+      if (typeof chore.kid === 'number') S.kids[chore.kid].xp = (S.kids[chore.kid].xp || 0) + 1;
+      log('Approved "' + chore.name + '"'); confetti(); saveState(); render();
     }
     if (action === 'reject') {
-      requirePin(() => { chore.status = 'rejected'; log('Rejected "' + chore.name + '"'); saveState(); render(); });
+      chore.status = 'rejected'; log('Rejected "' + chore.name + '"'); saveState(); render();
     }
     if (action === 'reset') { chore.status = 'none'; chore.submittedAt = null; saveState(); render(); }
     if (action === 'delete') {
