@@ -26,6 +26,7 @@ function defaultState() {
     chores:     [],
     logs:       [],
     bank:       [],
+    screenTimeBase: 360,
     activities: defaultActivities(),
     rewards:    [defaultRewards(), defaultRewards()],
     pendingRewards: [],
@@ -36,7 +37,7 @@ function defaultState() {
 function makeKid() {
   const subj = {};
   SUBJECTS.forEach(s => { subj[s] = { current: 'B', baseline: 'B' }; });
-  return { xp: 0, streak: 0, subjects: subj, points: 0 };
+  return { xp: 0, streak: 0, subjects: subj, points: 0, screenMinsUsed: 0, screenMinsBonus: 0 };
 }
 
 function defaultActivities() {
@@ -108,7 +109,12 @@ async function loadState() {
     if (!remote.pendingRewards) remote.pendingRewards = [];
     if (!remote.pointSubmissions) remote.pointSubmissions = [];
     if (!remote.bank) remote.bank = [];
-    remote.kids.forEach(k => { if (k.points === undefined) k.points = 0; });
+    remote.kids.forEach(k => {
+      if (k.points === undefined) k.points = 0;
+      if (k.screenMinsUsed === undefined) k.screenMinsUsed = 0;
+      if (k.screenMinsBonus === undefined) k.screenMinsBonus = 0;
+    });
+    if (!remote.screenTimeBase) remote.screenTimeBase = 360;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(remote));
     dot('saved');
     return remote;
@@ -243,6 +249,8 @@ function render() {
   renderRewardMenu();
   renderGrades();
   renderLog();
+  renderScreenTime();
+  renderPendingActivities();
   const wk2 = el('weekKey2'); if (wk2) wk2.textContent = S.week;
   const ds = el('dataSize'); if (ds) ds.textContent = (JSON.stringify(S).length / 1024).toFixed(2) + ' KB';
 }
@@ -544,6 +552,55 @@ function showToast(msg) {
 }
 
 // ── BIND EVENTS ───────────────────────────────────────────
+function logScreenTime(kidIdx, mins) {
+  S.kids[kidIdx].screenMinsUsed = Math.max(0, (S.kids[kidIdx].screenMinsUsed || 0) + mins);
+  log(S.names[kidIdx] + (mins > 0 ? ' used ' : ' removed ') + Math.abs(mins) + ' min screen time');
+  saveState(); renderScreenTime();
+}
+
+function renderScreenTime() {
+  [0, 1].forEach(i => {
+    const kid = S.kids[i];
+    const n = i === 0 ? 'kid1' : 'kid2';
+    const base = S.screenTimeBase || 360;
+    const bonus = kid.screenMinsBonus || 0;
+    const total = base + bonus;
+    const used = kid.screenMinsUsed || 0;
+    const pct = Math.min(100, (used / total) * 100);
+    const usedH = Math.floor(used / 60);
+    const usedM = used % 60;
+    const totalH = Math.floor(total / 60);
+    const totalM = total % 60;
+    const usedStr = usedH > 0 ? usedH + 'h ' + (usedM > 0 ? usedM + 'm' : '') : usedM + 'm';
+    const totalStr = totalH > 0 ? totalH + 'h ' + (totalM > 0 ? totalM + 'm' : '') : totalM + 'm';
+    const fill = document.getElementById(n + 'ScreenFill');
+    const label = document.getElementById(n + 'ScreenLabel');
+    if (fill) {
+      fill.style.width = pct + '%';
+      fill.style.background = pct >= 90 ? '#ff4757' : pct >= 70 ? '#ffa502' : (i === 0 ? 'var(--k1)' : 'var(--k2)');
+    }
+    if (label) {
+      label.textContent = usedStr.trim() + ' used of ' + totalStr.trim();
+      label.style.color = pct >= 90 ? '#ff4757' : pct >= 70 ? '#ffa502' : 'var(--muted)';
+    }
+  });
+}
+
+function renderPendingActivities() {
+  [0, 1].forEach(i => {
+    const container = document.getElementById((i === 0 ? 'kid1' : 'kid2') + 'PendingActivities');
+    if (!container) return;
+    const pending = (S.pointSubmissions || []).filter(p => p.status === 'pending' && p.kidIdx === i);
+    if (pending.length === 0) { container.innerHTML = ''; return; }
+    container.innerHTML = '<div class="small muted" style="margin-bottom:6px;text-transform:uppercase;letter-spacing:1px">⏳ Awaiting Approval</div>' +
+      pending.map(p => '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--card2);border-radius:10px;margin-bottom:6px;border:1px solid rgba(255,165,2,0.2)">' +
+        '<div style="flex:1"><div class="small"><b>' + p.activityName + '</b></div><div class="small muted">+' + p.points + ' pts</div></div>' +
+        '<button data-pts-approve="' + p.id + '" class="small-btn" style="color:#2ed573;border-color:rgba(46,213,115,0.3)">✓ OK</button>' +
+        '<button data-pts-reject="' + p.id + '" class="small-btn" style="opacity:.4">✕</button>' +
+        '</div>').join('');
+  });
+}
+
 function bindEvents() {
 
   // Tab switching
@@ -716,6 +773,10 @@ function bindEvents() {
       if (req) {
         req.status = 'approved';
         S.kids[req.kidIdx].points = Math.max(0, (S.kids[req.kidIdx].points || 0) - req.cost);
+        // If reward is screen time, add bonus minutes
+        const name = req.name.toLowerCase();
+        if (name.includes('30 min')) S.kids[req.kidIdx].screenMinsBonus = (S.kids[req.kidIdx].screenMinsBonus || 0) + 30;
+        else if (name.includes('1 hour') || name.includes('60 min')) S.kids[req.kidIdx].screenMinsBonus = (S.kids[req.kidIdx].screenMinsBonus || 0) + 60;
         log('Granted reward "' + req.name + '" to ' + S.names[req.kidIdx]);
         saveState(); render();
         showToast('Reward granted to ' + S.names[req.kidIdx] + '!');
@@ -780,6 +841,8 @@ function bindEvents() {
       S.kids.forEach(kid => {
         SUBJECTS.forEach(s => { kid.subjects[s].baseline = kid.subjects[s].current; });
         kid.points = 0;
+        kid.screenMinsUsed = 0;
+        kid.screenMinsBonus = 0;
       });
       S.chores = [];
       S.pointSubmissions = (S.pointSubmissions || []).filter(p => p.status === 'pending');

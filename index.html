@@ -68,6 +68,18 @@
         </div>
         <div class="small" id="kid1Breakdown"></div>
         <button class="reward-btn k1-btn" onclick="openRewardModal(0)">🎁 Redeem Points</button>
+        <div class="screen-time-row" style="margin-top:10px">
+          <div class="small muted">📱 Screen Time This Week</div>
+          <div class="screen-time-bar" style="height:8px;background:var(--card2);border-radius:99px;margin:6px 0;overflow:hidden;border:1px solid var(--border)"><div id="kid1ScreenFill" style="height:100%;border-radius:99px;transition:width .4s"></div></div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="small" id="kid1ScreenLabel">0h used of 6h</span>
+            <div style="display:flex;gap:5px">
+              <button onclick="logScreenTime(0,-30)" class="small-btn" style="padding:3px 8px">-30m</button>
+              <button onclick="logScreenTime(0,30)" class="small-btn" style="padding:3px 8px;color:#ffa502;border-color:rgba(255,165,2,0.3)">+30m</button>
+            </div>
+          </div>
+        </div>
+        <div id="kid1PendingActivities" style="margin-top:8px"></div>
       </div>
 
       <!-- Kid 2 Card -->
@@ -93,6 +105,18 @@
         </div>
         <div class="small" id="kid2Breakdown"></div>
         <button class="reward-btn k2-btn" onclick="openRewardModal(1)">🎁 Redeem Points</button>
+        <div class="screen-time-row" style="margin-top:10px">
+          <div class="small muted">📱 Screen Time This Week</div>
+          <div class="screen-time-bar" style="height:8px;background:var(--card2);border-radius:99px;margin:6px 0;overflow:hidden;border:1px solid var(--border)"><div id="kid2ScreenFill" style="height:100%;border-radius:99px;transition:width .4s"></div></div>
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <span class="small" id="kid2ScreenLabel">0h used of 6h</span>
+            <div style="display:flex;gap:5px">
+              <button onclick="logScreenTime(1,-30)" class="small-btn" style="padding:3px 8px">-30m</button>
+              <button onclick="logScreenTime(1,30)" class="small-btn" style="padding:3px 8px;color:#ffa502;border-color:rgba(255,165,2,0.3)">+30m</button>
+            </div>
+          </div>
+        </div>
+        <div id="kid2PendingActivities" style="margin-top:8px"></div>
       </div>
 
       <!-- Week info -->
