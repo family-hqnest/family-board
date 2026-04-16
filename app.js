@@ -775,7 +775,7 @@ function bindEvents() {
     if (ptsReject) {
       const subId = ptsReject.dataset.ptsReject;
       const sub = S.pointSubmissions.find(p => p.id === subId);
-      if (sub) { sub.status = 'rejected'; saveState(); renderActivities(); }
+      if (sub) { sub.status = 'rejected'; saveState(); renderActivities(); renderPendingActivities(); }
     }
 
     if (rewardDel) {
