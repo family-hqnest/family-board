@@ -14,195 +14,325 @@
   <title>Family Achievement Board</title>
 </head>
 <body>
-<div class="wrap" id="appRoot">
-  <header>
-    <h1>🏆 <span class="brand">Family Achievement Board</span></h1>
-    <span id="syncDot" class="sync-dot saving" title="Syncing...">●</span>
-    <div class="row">
+
+<!-- APP SHELL -->
+<div id="app">
+
+  <!-- HEADER -->
+  <header id="appHeader">
+    <div class="header-left">
+      <span class="header-title">🏆 FamBoard</span>
+      <span id="syncDot" class="sync-dot saving" title="Syncing...">●</span>
+    </div>
+    <div class="header-right">
       <div class="clock" id="clock"></div>
-      <button id="displayToggle">📺 Display</button>
-      <button id="settingsBtn">⚙️ Settings</button>
+      <button id="settingsBtn" class="icon-btn">⚙️</button>
     </div>
   </header>
-  <section class="grid">
-    <article class="card kpi">
-      <h2>🏆 Family Total Payout</h2>
-      <div class="money" id="payoutVal">$0.00</div>
-      <div class="small muted">Combined payout for all kids</div>
-      <div class="row" style="margin-top:8px;gap:16px">
-        <span class="small">Approved <b id="approvedCount">0</b></span>
-        <span class="small">Pending <b id="pendingCount">0</b></span>
-        <span class="small">Rejected <b id="rejectedCount">0</b></span>
-      </div>
-    </article>
-    <article class="card kid-payout" style="border-color:rgba(255,71,87,0.3)">
-      <h2 style="color:#ff4757">🧒 <span id="kid1Name">Sofia</span>'s Payout</h2>
-      <div class="money" id="kid1PayoutVal" style="color:#ff4757">$20.00</div>
-      <div class="small muted">Base $20 — earn up to $30</div>
-      <div class="progress-container">
-        <div class="progress-labels row"><span class="small">$0</span><span class="small">$20</span><span class="small">$30</span></div>
-        <div class="progress-bar"><div class="progress-fill" id="kid1Progress" style="background:linear-gradient(90deg,#ff4757,#ffa502);width:0%"></div></div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <div><div class="small" id="kid1ChoreRatio">0/0 chores done</div><div class="small muted" id="kid1PendingCount">0 pending</div></div>
-        <div><div class="small" id="kid1GradeRatio">0% grade growth</div></div>
-      </div>
-      <div class="small" id="kid1Level" style="margin-top:6px;color:#ffa502"></div>
-      <div id="kid1Breakdown" style="margin-top:8px"></div>
-    </article>
-    <article class="card kid-payout" style="border-color:rgba(0,210,211,0.3)">
-      <h2 style="color:#00d2d3">👩 <span id="kid2Name">Juliana</span>'s Payout</h2>
-      <div class="money" id="kid2PayoutVal" style="color:#00d2d3">$20.00</div>
-      <div class="small muted">Base $20 — earn up to $30</div>
-      <div class="progress-container">
-        <div class="progress-labels row"><span class="small">$0</span><span class="small">$20</span><span class="small">$30</span></div>
-        <div class="progress-bar"><div class="progress-fill" id="kid2Progress" style="background:linear-gradient(90deg,#00d2d3,#2be9ff);width:0%"></div></div>
-      </div>
-      <div class="row" style="margin-top:10px">
-        <div><div class="small" id="kid2ChoreRatio">0/0 chores done</div><div class="small muted" id="kid2PendingCount">0 pending</div></div>
-        <div><div class="small" id="kid2GradeRatio">0% grade growth</div></div>
-      </div>
-      <div class="small" id="kid2Level" style="margin-top:6px;color:#00d2d3"></div>
-      <div id="kid2Breakdown" style="margin-top:8px"></div>
-    </article>
-    <article class="card">
-      <h2>📋 Chores</h2>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-        <input id="choreName" placeholder="Chore name..." style="flex:2;min-width:140px">
-        <select id="choreFrequency" style="width:150px">
-          <option value="weekly">📆 Weekly</option>
-          <option value="twice-weekly">📅 2x per week</option>
-          <option value="daily">📅 Daily (7 entries)</option>
-        </select>
-        <select id="choreKid" style="width:120px">
-          <option value="kid1">🧒 Sofia</option>
-          <option value="kid2">👩 Juliana</option>
-          <option value="shared">👨‍👩‍👧 Shared</option>
-        </select>
-        <button id="addChore">+ Add</button>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem">
-          <input type="checkbox" id="choreRecurring"> 🔁 Recurring
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem">
-          <input type="checkbox" id="choreExtra"> ⭐ Extra credit
-        </label>
-        <label style="display:flex;align-items:center;gap:6px;font-size:.85rem">
-          <input type="checkbox" id="saveToBankCheck"> 🏦 Save to Bank
-        </label>
-      </div>
-      <div id="bonusDollarsRow" style="display:none;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center">
-        <label class="small">Bonus ($):</label>
-        <input id="choreBonusDollars" type="number" min="0.50" max="5" step="0.50" value="1" style="width:80px">
-        <span class="small muted">(max $5 extra per week)</span>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px">
-        <input id="choreDod" placeholder="Done when... (e.g. floor clear, bed made)" style="flex:1">
-      </div>
-      <div class="row small muted" style="gap:6px;flex-wrap:wrap;margin-bottom:10px">
-        <span>Filter:</span>
-        <button data-filter="all" class="active">All</button>
-        <button data-filter="pending">Pending</button>
-        <button data-filter="approved">Approved</button>
-        <button data-filter="kid1">Sofia</button>
-        <button data-filter="kid2">Juliana</button>
-        <button data-filter="notdone">Not Done</button>
-        <button data-filter="rejected">Rejected</button>
-      </div>
-      <div id="choreList"></div>
-    </article>
-    <article class="card">
-      <h2>🏦 Chore Bank</h2>
-      <p class="small muted" style="margin-bottom:12px">Your saved chores. Tap "+ Add to Week" to activate for this week.</p>
-      <div id="bankList"></div>
-    </article>
 
-    <article class="card">
-      <h2>📅 Week Control</h2>
-      <div class="small">Week: <span id="weekKey">-</span></div>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">
-        <button id="newWeekBtn">🔄 New Week</button>
-        <button id="openGradeBtn">📚 Update Grades</button>
+  <!-- TAB CONTENT -->
+  <main id="tabContent">
+
+    <!-- HOME TAB -->
+    <div id="tab-home" class="tab-panel active">
+      <div class="card kpi">
+        <div class="kpi-label">🏆 Family Total</div>
+        <div class="kpi-money" id="payoutVal">$0.00</div>
+        <div class="kpi-row">
+          <span class="small muted">Approved <b id="approvedCount">0</b></span>
+          <span class="small muted">Pending <b id="pendingCount">0</b></span>
+          <span class="small muted">Rejected <b id="rejectedCount">0</b></span>
+        </div>
       </div>
-    </article>
-    <article class="card">
-      <h2>📚 Grades</h2>
-      <div id="gradeSummary"></div>
-    </article>
-    <article class="card">
-      <h2>📋 Activity Log</h2>
-      <div id="activity"></div>
-      <div style="display:flex;gap:8px;margin-top:10px">
-        <button class="small" id="clearLogBtn">Clear Logs</button>
-        <button class="small" id="exportLogBtn">Export Logs</button>
+
+      <!-- Kid 1 Card -->
+      <div class="card kid-card" id="kidCard0">
+        <div class="kid-card-header">
+          <div class="kid-avatar" id="kidAvatar0">🧒</div>
+          <div class="kid-info">
+            <div class="kid-name" id="kid1Name">Sofia</div>
+            <div class="small muted" id="kid1PendingCount">0 pending</div>
+          </div>
+          <div class="kid-payout" id="kid1PayoutVal">$20.00</div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar"><div class="progress-fill k1-fill" id="kid1Progress" style="width:0%"></div></div>
+          <div class="progress-labels"><span class="small muted">$0</span><span class="small muted">$20</span><span class="small muted">$30</span></div>
+        </div>
+        <div class="kid-stats-row">
+          <div class="kid-stat"><div class="small" id="kid1ChoreRatio">0/0 chores</div></div>
+          <div class="kid-stat"><div class="small" id="kid1GradeRatio">0% growth</div></div>
+          <div class="kid-stat points-stat">
+            <div class="points-badge k1-points">⭐ <span id="kid1Points">0</span> pts</div>
+          </div>
+        </div>
+        <div class="small" id="kid1Breakdown"></div>
+        <button class="reward-btn k1-btn" onclick="openRewardModal(0)">🎁 Redeem Points</button>
       </div>
-    </article>
-  </section>
+
+      <!-- Kid 2 Card -->
+      <div class="card kid-card" id="kidCard1">
+        <div class="kid-card-header">
+          <div class="kid-avatar" id="kidAvatar1">👩</div>
+          <div class="kid-info">
+            <div class="kid-name k2-name" id="kid2Name">Juliana</div>
+            <div class="small muted" id="kid2PendingCount">0 pending</div>
+          </div>
+          <div class="kid-payout k2-pay" id="kid2PayoutVal">$20.00</div>
+        </div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar"><div class="progress-fill k2-fill" id="kid2Progress" style="width:0%"></div></div>
+          <div class="progress-labels"><span class="small muted">$0</span><span class="small muted">$20</span><span class="small muted">$30</span></div>
+        </div>
+        <div class="kid-stats-row">
+          <div class="kid-stat"><div class="small" id="kid2ChoreRatio">0/0 chores</div></div>
+          <div class="kid-stat"><div class="small" id="kid2GradeRatio">0% growth</div></div>
+          <div class="kid-stat points-stat">
+            <div class="points-badge k2-points">⭐ <span id="kid2Points">0</span> pts</div>
+          </div>
+        </div>
+        <div class="small" id="kid2Breakdown"></div>
+        <button class="reward-btn k2-btn" onclick="openRewardModal(1)">🎁 Redeem Points</button>
+      </div>
+
+      <!-- Week info -->
+      <div class="card">
+        <div class="small muted">Week: <span id="weekKey">-</span></div>
+      </div>
+    </div>
+
+    <!-- CHORES TAB -->
+    <div id="tab-chores" class="tab-panel">
+      <div class="card">
+        <h2>Add Chore</h2>
+        <div class="form-row">
+          <input id="choreName" placeholder="Chore name..." class="flex-input">
+          <select id="choreFrequency">
+            <option value="weekly">📆 Weekly</option>
+            <option value="twice-weekly">📅 2x/week</option>
+            <option value="daily">📅 Daily</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <select id="choreKid">
+            <option value="0">🧒 Sofia</option>
+            <option value="1">👩 Juliana</option>
+            <option value="shared">👨‍👩‍👧 Shared</option>
+          </select>
+          <label class="check-label"><input type="checkbox" id="choreRecurring"> 🔁 Recurring</label>
+          <label class="check-label"><input type="checkbox" id="choreExtra"> ⭐ Extra</label>
+        </div>
+        <div id="bonusDollarsRow" style="display:none" class="form-row">
+          <label class="small">Bonus $:</label>
+          <input id="choreBonusDollars" type="number" min="0.5" max="5" step="0.5" value="1" style="width:80px">
+        </div>
+        <div class="form-row">
+          <input id="choreDod" placeholder="Done when... (e.g. floor clear, bed made)" class="flex-input">
+          <label class="check-label"><input type="checkbox" id="saveToBankCheck"> 🏦 Save to Bank</label>
+        </div>
+        <button id="addChore" class="primary-btn">+ Add Chore</button>
+      </div>
+
+      <div class="card">
+        <div class="filter-row">
+          <button data-filter="all" class="filter-btn active">All</button>
+          <button data-filter="pending" class="filter-btn">Pending</button>
+          <button data-filter="approved" class="filter-btn">Approved</button>
+          <button data-filter="notdone" class="filter-btn">Not Done</button>
+          <button data-filter="rejected" class="filter-btn">Rejected</button>
+          <button data-filter="kid1" class="filter-btn">Sofia</button>
+          <button data-filter="kid2" class="filter-btn">Juliana</button>
+        </div>
+        <div id="choreList"></div>
+      </div>
+    </div>
+
+    <!-- BANK TAB -->
+    <div id="tab-bank" class="tab-panel">
+      <div class="card">
+        <h2>🏦 Chore Bank</h2>
+        <p class="small muted" style="margin-bottom:12px">Saved chores. Pick a kid and tap Add to Week.</p>
+        <div id="bankList"></div>
+      </div>
+
+      <div class="card">
+        <h2>🌟 Lifestyle Activities</h2>
+        <p class="small muted" style="margin-bottom:12px">Kids submit these to earn points. You approve on the honor system.</p>
+        <div id="activityList"></div>
+        <button class="secondary-btn" style="margin-top:12px" onclick="openAddActivityModal()">+ Add Activity</button>
+      </div>
+
+      <div class="card">
+        <h2>🎁 Reward Menu</h2>
+        <p class="small muted" style="margin-bottom:8px">Points reset every New Week.</p>
+        <div id="rewardMenuList"></div>
+        <button class="secondary-btn" style="margin-top:12px" onclick="openAddRewardModal()">+ Add Reward</button>
+      </div>
+    </div>
+
+    <!-- MANAGE TAB -->
+    <div id="tab-manage" class="tab-panel">
+      <div class="card">
+        <h2>📅 Week Control</h2>
+        <div class="small muted" style="margin-bottom:12px">Week: <span id="weekKey2">-</span></div>
+        <div class="btn-row">
+          <button id="newWeekBtn" class="danger-btn">🔄 New Week</button>
+          <button id="openGradeBtn" class="secondary-btn">📚 Grades</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>📚 Grades</h2>
+        <div id="gradeSummary"></div>
+      </div>
+
+      <div class="card">
+        <h2>📋 Activity Log</h2>
+        <div id="activity"></div>
+        <div class="btn-row" style="margin-top:10px">
+          <button class="small-btn" id="clearLogBtn">Clear Logs</button>
+          <button class="small-btn" id="exportLogBtn">Export Logs</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+
+  <!-- BOTTOM TAB BAR -->
+  <nav id="tabBar">
+    <button class="tab-btn active" data-tab="home">
+      <span class="tab-icon">🏠</span>
+      <span class="tab-label">Home</span>
+    </button>
+    <button class="tab-btn" data-tab="chores">
+      <span class="tab-icon">📋</span>
+      <span class="tab-label">Chores</span>
+    </button>
+    <button class="tab-btn" data-tab="bank">
+      <span class="tab-icon">🏦</span>
+      <span class="tab-label">Bank</span>
+    </button>
+    <button class="tab-btn" data-tab="manage">
+      <span class="tab-icon">⚙️</span>
+      <span class="tab-label">Manage</span>
+    </button>
+  </nav>
+
 </div>
+
+<!-- MODALS -->
 <dialog id="gradeModal">
   <h3>📚 Update Grades</h3>
-  <p class="small muted">Growth vs your own baseline drives the payout bonus.</p>
+  <p class="small muted">Growth vs your own baseline drives the bonus.</p>
   <div id="gradeRows"></div>
-  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+  <div class="modal-btns">
     <button id="gradeCancel">Cancel</button>
-    <button id="gradeSave">Save Grades</button>
+    <button id="gradeSave" class="primary-btn">Save Grades</button>
   </div>
 </dialog>
+
 <dialog id="settingsModal">
   <h3>⚙️ Settings</h3>
-  <h4 style="margin:16px 0 8px">Names & Config</h4>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-    <div><label class="small">Kid 1 Name</label><input id="cfgName0" placeholder="Sofia" style="width:100%"></div>
-    <div><label class="small">Kid 1 Emoji</label><input id="cfgEmoji0" placeholder="🧒" style="width:100%"></div>
-    <div><label class="small">Kid 2 Name</label><input id="cfgName1" placeholder="Juliana" style="width:100%"></div>
-    <div><label class="small">Kid 2 Emoji</label><input id="cfgEmoji1" placeholder="👩" style="width:100%"></div>
-    <div><label class="small">Base Pay ($)</label><input id="cfgBase" type="number" value="20" style="width:100%"></div>
-    <div><label class="small">Max Pay ($)</label><input id="cfgMax" type="number" value="30" style="width:100%"></div>
+  <h4 style="margin:12px 0 8px">Names & Config</h4>
+  <div class="settings-grid">
+    <div><label class="small">Kid 1 Name</label><input id="cfgName0" style="width:100%"></div>
+    <div><label class="small">Kid 1 Emoji</label><input id="cfgEmoji0" style="width:100%"></div>
+    <div><label class="small">Kid 2 Name</label><input id="cfgName1" style="width:100%"></div>
+    <div><label class="small">Kid 2 Emoji</label><input id="cfgEmoji1" style="width:100%"></div>
+    <div><label class="small">Base Pay ($)</label><input id="cfgBase" type="number" style="width:100%"></div>
+    <div><label class="small">Max Pay ($)</label><input id="cfgMax" type="number" style="width:100%"></div>
   </div>
-  <button id="saveSettingsConfig">Save Settings</button>
+  <button id="saveSettingsConfig" class="primary-btn" style="margin-top:12px">Save</button>
   <h4 style="margin:16px 0 8px">Parent PIN</h4>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
+  <div class="form-row">
     <input id="currentPin" type="password" placeholder="Current PIN" maxlength="4" style="width:130px">
-    <input id="newPin" type="password" placeholder="New PIN (4 digits)" maxlength="4" style="width:150px">
-    <button id="updatePinBtn">Update PIN</button>
+    <input id="newPin" type="password" placeholder="New PIN" maxlength="4" style="width:130px">
+    <button id="updatePinBtn">Update</button>
   </div>
-  <div class="small muted" id="pinStatus" style="margin-top:6px"></div>
-  <h4 style="margin:16px 0 8px">Backup & Restore</h4>
-  <input id="passphrase" type="password" placeholder="Passphrase for encryption" style="width:100%;margin-bottom:8px">
-  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
-    <button id="exportBtn">Export Encrypted</button>
-    <button id="importBtn">Import Encrypted</button>
-    <button id="clearBtn" style="color:#ff4757">Clear All Data</button>
+  <div class="small muted" id="pinStatus"></div>
+  <h4 style="margin:16px 0 8px">Backup</h4>
+  <input id="passphrase" type="password" placeholder="Passphrase" style="width:100%;margin-bottom:8px">
+  <div class="btn-row">
+    <button id="exportBtn">Export</button>
+    <button id="importBtn">Import</button>
+    <button id="clearBtn" class="danger-btn">Clear Data</button>
   </div>
-  <textarea id="blobArea" placeholder="Encrypted data appears here..." style="width:100%;height:80px;font-size:.75rem"></textarea>
+  <textarea id="blobArea" placeholder="Encrypted data..." style="width:100%;height:70px;margin-top:8px;font-size:.75rem"></textarea>
   <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px">
     <span class="small muted">Size: <span id="dataSize">-</span></span>
     <button id="settingsClose">Close</button>
   </div>
 </dialog>
+
 <dialog id="pinModal">
-  <h3>🔐 Parent PIN Required</h3>
-  <p class="small muted">Enter your PIN to approve or reject.</p>
-  <input id="parentPin" type="password" maxlength="4" placeholder="0000" style="width:120px;font-size:1.5rem;text-align:center;letter-spacing:8px;margin:12px 0;display:block">
-  <div style="display:flex;justify-content:flex-end;gap:8px">
+  <h3>🔐 PIN Required</h3>
+  <input id="parentPin" type="password" maxlength="4" placeholder="0000"
+    style="width:120px;font-size:1.5rem;text-align:center;letter-spacing:8px;margin:12px auto;display:block">
+  <div class="modal-btns">
     <button id="pinCancel">Cancel</button>
-    <button id="pinSubmit">Submit</button>
+    <button id="pinSubmit" class="primary-btn">Submit</button>
   </div>
 </dialog>
 
 <dialog id="editChoreModal">
   <h3>✏️ Edit Chore</h3>
-  <p class="small muted">Update the name and completion standard.</p>
-  <label class="small" style="display:block;margin:12px 0 4px">Chore Name</label>
-  <input id="editChoreName" type="text" style="width:100%;margin-bottom:12px" placeholder="Chore name">
+  <label class="small" style="display:block;margin-bottom:4px">Name</label>
+  <input id="editChoreName" style="width:100%;margin-bottom:12px">
   <label class="small" style="display:block;margin-bottom:4px">Done When</label>
-  <input id="editChoreDod" type="text" style="width:100%" placeholder="e.g. floor clear, bed made">
-  <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+  <input id="editChoreDod" style="width:100%">
+  <div class="modal-btns" style="margin-top:16px">
     <button id="editChoreCancel">Cancel</button>
-    <button id="editChoreSave">Save Changes</button>
+    <button id="editChoreSave" class="primary-btn">Save</button>
   </div>
 </dialog>
+
+<dialog id="rewardModal">
+  <h3 id="rewardModalTitle">🎁 Redeem Points</h3>
+  <p class="small muted" id="rewardModalPoints"></p>
+  <div id="rewardModalList"></div>
+  <div class="modal-btns" style="margin-top:16px">
+    <button id="rewardModalClose">Close</button>
+  </div>
+</dialog>
+
+<dialog id="addActivityModal">
+  <h3>🌟 Add Lifestyle Activity</h3>
+  <label class="small" style="display:block;margin-bottom:4px">Activity Name</label>
+  <input id="activityName" placeholder="e.g. 30 min outdoor activity" style="width:100%;margin-bottom:12px">
+  <label class="small" style="display:block;margin-bottom:4px">Points Earned</label>
+  <input id="activityPoints" type="number" value="10" min="1" max="100" style="width:100px">
+  <div class="modal-btns" style="margin-top:16px">
+    <button id="addActivityCancel">Cancel</button>
+    <button id="addActivitySave" class="primary-btn">Add Activity</button>
+  </div>
+</dialog>
+
+<dialog id="addRewardModal">
+  <h3>🎁 Add Reward</h3>
+  <label class="small" style="display:block;margin-bottom:4px">Reward Name</label>
+  <input id="rewardName" placeholder="e.g. +30 min screen time" style="width:100%;margin-bottom:12px">
+  <label class="small" style="display:block;margin-bottom:4px">Point Cost</label>
+  <input id="rewardCost" type="number" value="10" min="1" style="width:100px">
+  <div class="modal-btns" style="margin-top:16px">
+    <button id="addRewardCancel">Cancel</button>
+    <button id="addRewardSave" class="primary-btn">Add Reward</button>
+  </div>
+</dialog>
+
+<dialog id="submitActivityModal">
+  <h3 id="submitActivityTitle">🌟 Submit Activity</h3>
+  <p class="small muted" id="submitActivityDesc"></p>
+  <label class="small" style="display:block;margin:12px 0 4px">Who completed it?</label>
+  <select id="submitActivityKid" style="width:100%">
+    <option value="0">🧒 Sofia</option>
+    <option value="1">👩 Juliana</option>
+  </select>
+  <div class="modal-btns" style="margin-top:16px">
+    <button id="submitActivityCancel">Cancel</button>
+    <button id="submitActivityConfirm" class="primary-btn">Submit for Approval</button>
+  </div>
+</dialog>
+
 <script src="./app.js"></script>
 </body>
 </html>
