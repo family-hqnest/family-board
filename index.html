@@ -267,7 +267,28 @@
     <div><label class="small">Max Pay ($)</label><input id="cfgMax" type="number" style="width:100%"></div>
   </div>
   <button id="saveSettingsConfig" class="primary-btn" style="margin-top:12px">Save</button>
-  <h4 style="margin:16px 0 8px">Parent PIN</h4>
+  <h4 style="margin:16px 0 8px">Points Adjustment</h4>
+  <div style="margin-bottom:12px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span class="small" style="width:70px;color:var(--k1)">🧒 Sofia</span>
+      <button onclick="adjustPoints(0,-10)" class="small-btn">-10</button>
+      <button onclick="adjustPoints(0,-5)" class="small-btn">-5</button>
+      <button onclick="adjustPoints(0,5)" class="small-btn" style="color:#ffa502;border-color:rgba(255,165,2,0.3)">+5</button>
+      <button onclick="adjustPoints(0,10)" class="small-btn" style="color:#ffa502;border-color:rgba(255,165,2,0.3)">+10</button>
+      <span class="small muted" id="settingsKid1Points">0 pts</span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <span class="small" style="width:70px;color:var(--k2)">👩 Juliana</span>
+      <button onclick="adjustPoints(1,-10)" class="small-btn">-10</button>
+      <button onclick="adjustPoints(1,-5)" class="small-btn">-5</button>
+      <button onclick="adjustPoints(1,5)" class="small-btn" style="color:#ffa502;border-color:rgba(255,165,2,0.3)">+5</button>
+      <button onclick="adjustPoints(1,10)" class="small-btn" style="color:#ffa502;border-color:rgba(255,165,2,0.3)">+10</button>
+      <span class="small muted" id="settingsKid2Points">0 pts</span>
+    </div>
+  </div>
+  <button onclick="clearTestData()" class="small-btn" style="color:#ffa502;border-color:rgba(255,165,2,0.3);margin-bottom:16px">🧹 Clear Test Data</button>
+
+  <h4 style="margin:0 0 8px">Parent PIN</h4>
   <div class="form-row">
     <input id="currentPin" type="password" placeholder="Current PIN" maxlength="4" style="width:130px">
     <input id="newPin" type="password" placeholder="New PIN" maxlength="4" style="width:130px">

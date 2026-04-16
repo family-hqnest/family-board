@@ -552,6 +552,24 @@ function showToast(msg) {
 }
 
 // ── BIND EVENTS ───────────────────────────────────────────
+function clearTestData() {
+  if (!confirm('Clear all chores, activity submissions and pending rewards? Names, grades, bank and reward menu stay.')) return;
+  S.chores = [];
+  S.pointSubmissions = [];
+  S.pendingRewards = [];
+  S.kids.forEach(k => { k.screenMinsUsed = 0; k.screenMinsBonus = 0; });
+  log('Test data cleared');
+  saveState(); render();
+  showToast('Test data cleared!');
+}
+
+function adjustPoints(kidIdx, amount) {
+  S.kids[kidIdx].points = Math.max(0, (S.kids[kidIdx].points || 0) + amount);
+  log(S.names[kidIdx] + ' points adjusted by ' + (amount > 0 ? '+' : '') + amount);
+  saveState(); render();
+  showToast(S.names[kidIdx] + ': ' + S.kids[kidIdx].points + ' pts');
+}
+
 function logScreenTime(kidIdx, mins) {
   S.kids[kidIdx].screenMinsUsed = Math.max(0, (S.kids[kidIdx].screenMinsUsed || 0) + mins);
   log(S.names[kidIdx] + (mins > 0 ? ' used ' : ' removed ') + Math.abs(mins) + ' min screen time');
@@ -596,7 +614,7 @@ function renderPendingActivities() {
       pending.map(p => '<div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--card2);border-radius:10px;margin-bottom:6px;border:1px solid rgba(255,165,2,0.2)">' +
         '<div style="flex:1"><div class="small"><b>' + p.activityName + '</b></div><div class="small muted">+' + p.points + ' pts</div></div>' +
         '<button data-pts-approve="' + p.id + '" class="small-btn" style="color:#2ed573;border-color:rgba(46,213,115,0.3)">✓ OK</button>' +
-        '<button data-pts-reject="' + p.id + '" class="small-btn" style="opacity:.4">✕</button>' +
+        '<button data-pts-reject="' + p.id + '" class="small-btn" style="color:#ff4757;border-color:rgba(255,71,87,0.3)">✕ Remove</button>' +
         '</div>').join('');
   });
 }
@@ -873,6 +891,8 @@ function bindEvents() {
     el('cfgEmoji0').value = S.emojis[0]; el('cfgEmoji1').value = S.emojis[1];
     el('cfgBase').value = S.base; el('cfgMax').value = S.maxPay;
     el('currentPin').value = ''; el('newPin').value = ''; el('pinStatus').textContent = '';
+    const p1 = el('settingsKid1Points'); if (p1) p1.textContent = (S.kids[0].points || 0) + ' pts';
+    const p2 = el('settingsKid2Points'); if (p2) p2.textContent = (S.kids[1].points || 0) + ' pts';
     el('settingsModal').showModal();
   });
   el('settingsClose').addEventListener('click', () => el('settingsModal').close());
