@@ -767,6 +767,7 @@ function bindEvents() {
         sub.status = 'approved';
         S.kids[sub.kidIdx].points = (S.kids[sub.kidIdx].points || 0) + sub.points;
         log('Approved activity "' + sub.activityName + '" for ' + S.names[sub.kidIdx] + ' (+' + sub.points + ' pts)');
+        S.pointSubmissions = S.pointSubmissions.filter(p => p.id !== subId);
         confetti(); saveState(); render();
         showToast('+' + sub.points + ' pts for ' + S.names[sub.kidIdx] + '!');
       }
@@ -775,7 +776,7 @@ function bindEvents() {
     if (ptsReject) {
       const subId = ptsReject.dataset.ptsReject;
       const sub = S.pointSubmissions.find(p => p.id === subId);
-      if (sub) { sub.status = 'rejected'; saveState(); renderActivities(); renderPendingActivities(); }
+      if (sub) { S.pointSubmissions = S.pointSubmissions.filter(p => p.id !== subId); log('Removed activity submission'); saveState(); renderActivities(); renderPendingActivities(); showToast('Activity removed'); }
     }
 
     if (rewardDel) {
