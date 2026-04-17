@@ -363,3 +363,25 @@ dialog[open] { animation: popIn .25s cubic-bezier(.34,1.56,.64,1); }
   }
   .kpi-money { font-size: 3rem; }
 }
+
+/* ── FIX: Tab panels still hide/show correctly on tablet ── */
+@media (min-width: 768px) {
+  .tab-panel {
+    display: none !important;
+  }
+  .tab-panel.active {
+    display: grid !important;
+  }
+  #tab-chores.active {
+    display: grid !important;
+  }
+  #tab-home.active {
+    display: grid !important;
+  }
+  #tab-bank.active {
+    display: grid !important;
+  }
+  #tab-manage.active {
+    display: grid !important;
+  }
+}
