@@ -290,3 +290,76 @@ dialog[open] { animation: popIn .25s cubic-bezier(.34,1.56,.64,1); }
   #tabContent { max-width: 600px; margin: 0 auto; }
   #tabBar { max-width: 600px; margin: 0 auto; left: 50%; transform: translateX(-50%); width: 100%; }
 }
+
+/* ── TABLET / IPAD LANDSCAPE ── */
+@media (min-width: 768px) {
+  #tabContent {
+    max-width: 100%;
+    padding: 16px 20px calc(var(--tab-h) + 16px);
+  }
+
+  /* Home tab - kids side by side */
+  #tab-home {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  #tab-home .card.kpi {
+    grid-column: 1 / -1;
+  }
+  #tab-home .card:last-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Chores tab - form left, list right */
+  #tab-chores {
+    display: grid;
+    grid-template-columns: 340px 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+
+  /* Bank tab - two columns */
+  #tab-bank {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  #tab-bank .card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Manage tab - two columns */
+  #tab-manage {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    align-items: start;
+  }
+  #tab-manage .card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  /* Tab bar wider */
+  #tabBar {
+    max-width: 100%;
+    transform: none;
+    left: 0;
+  }
+
+  .tab-label { font-size: .75rem; }
+  .tab-icon  { font-size: 1.5rem; }
+}
+
+/* ── IPAD LANDSCAPE SPECIFIC ── */
+@media (min-width: 1024px) {
+  #tab-home {
+    grid-template-columns: 1fr 1fr;
+  }
+  #tab-chores {
+    grid-template-columns: 380px 1fr;
+  }
+  .kpi-money { font-size: 3rem; }
+}
