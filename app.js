@@ -71,7 +71,8 @@ function defaultState() {
     rewards: [defaultRewards(), defaultRewards()],
     pendingRewards: [], pointSubmissions: [],
     teamGoal: { name: 'Family pizza night', emoji: '🍕', target: 400 },
-    teamPoints: 0
+    teamPoints: 0,
+    penalties: []
   };
 }
 
@@ -90,7 +91,7 @@ function normalize(s) {
     SUBJECTS.forEach(sub => { if (!k.subjects[sub]) k.subjects[sub] = { current: 'B', baseline: 'B' }; });
     if (!Array.isArray(k.activeDays)) k.activeDays = [];
   });
-  ['chores', 'logs', 'bank', 'activities', 'pendingRewards', 'pointSubmissions'].forEach(k => { if (!Array.isArray(s[k])) s[k] = d[k]; });
+  ['chores', 'logs', 'bank', 'activities', 'pendingRewards', 'pointSubmissions', 'penalties'].forEach(k => { if (!Array.isArray(s[k])) s[k] = d[k]; });
   if (!Array.isArray(s.rewards) || s.rewards.length < 2) s.rewards = [defaultRewards(), defaultRewards()];
   s.rewards = s.rewards.map(list => Array.isArray(list) ? list : []);
   s.rewards.forEach(list => list.forEach(r => { if (!r.id) r.id = uid(); }));
@@ -105,6 +106,13 @@ function normalize(s) {
       if (m) c.day = DAYS.indexOf(m[1]);
     }
   });
+  s.bank.forEach(b => {
+    if (!b.pays) b.pays = b.extra ? 'extra' : 'allowance';
+    if (!Array.isArray(b.auto)) b.auto = [];
+    if (b.pays === 'points' && !b.points) b.points = 10;
+    delete b.kid;
+  });
+  s.chores.forEach(c => { if (c.rare && !c.points) c.points = 10; });
   if (typeof s.teamGoal !== 'object') s.teamGoal = d.teamGoal;
   if (typeof s.teamPoints !== 'number') s.teamPoints = 0;
   if (typeof s.base !== 'number') s.base = 20;
@@ -193,11 +201,16 @@ function saveUI() { try { localStorage.setItem(UI_KEY, JSON.stringify(ui)); } ca
 const inParent = () => ui.who === 'parent' && parentUnlocked;
 const tabKey = () => inParent() ? 'parent' : 'kid';
 
-// ── PAYOUT MATH (unchanged from the old board) ──────────────
-// $20 base split across the kid's committed chores. Rejected
-// chores lose their share. Extra credit adds up to +$5, grade
+// ── PAYOUT MATH ──────────────────────────────────────────────
+// $20 base split across the kid's regular chores. Rejected chores
+// lose their share. Extra-credit chores add up to +$5, grade
 // improvement adds $1.25 per improved subject (up to +$5).
-const committedChores = i => S.chores.filter(c => c.kid === i && !c.extra);
+// Rare chores pay bonus points instead of money.
+// Disrespect: the week's chore money and grade bonus go to $0;
+// extra-credit chores can still earn some back.
+const isRegular = c => !c.extra && !c.rare;
+const committedChores = i => S.chores.filter(c => c.kid === i && isRegular(c));
+const penaltiesFor = i => (S.penalties || []).filter(p => p.kid === i);
 function choreValue(i) { const n = committedChores(i).length; return n ? S.base / n : 0; }
 function gradeImprovementBonus(kid) {
   let b = 0;
@@ -214,13 +227,16 @@ function gradeGrowthPct(kid) {
 }
 function payoutParts(i) {
   const total = committedChores(i).length, val = choreValue(i);
-  const rejected = S.chores.filter(c => c.kid === i && !c.extra && c.status === 'rejected').length;
-  const choreEarned = Math.max(0, S.base - rejected * val);
+  const rejected = S.chores.filter(c => c.kid === i && isRegular(c) && c.status === 'rejected').length;
+  const penalties = penaltiesFor(i), wiped = penalties.length > 0;
+  const choreBefore = Math.max(0, S.base - rejected * val);
+  const gradeBefore = gradeImprovementBonus(S.kids[i]);
+  const choreEarned = wiped ? 0 : choreBefore;
+  const grade = wiped ? 0 : gradeBefore;
   const extra = Math.min(5, S.chores.filter(c => c.kid === i && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0));
-  const grade = gradeImprovementBonus(S.kids[i]);
   const pay = Math.max(0, Math.min(S.maxPay, choreEarned + extra + grade));
-  const approved = S.chores.filter(c => c.kid === i && !c.extra && c.status === 'approved').length;
-  return { total, val, rejected, choreEarned, extra, grade, pay, approved };
+  const approved = S.chores.filter(c => c.kid === i && isRegular(c) && c.status === 'approved').length;
+  return { total, val, rejected, choreEarned, extra, grade, pay, approved, wiped, penalties, lost: wiped ? choreBefore + gradeBefore : 0, choreBefore };
 }
 const kidPayout = i => payoutParts(i).pay;
 
@@ -257,7 +273,8 @@ function expandChore(def) {
       name: n === 1 ? def.name : def.freq === 'daily' ? def.name + ' - ' + DAYS[i] : def.name + ' (' + (i + 1) + '/2)',
       baseName: def.name, kid: def.kid, freq: def.freq || 'weekly',
       day: def.freq === 'daily' ? i : undefined,
-      extra: !!def.extra, bonusDollars: def.bonusDollars || 0, dod: def.dod || '', recurring: !!def.recurring,
+      extra: def.pays ? def.pays === 'extra' : !!def.extra, rare: def.pays === 'points' || !!def.rare, points: def.pays === 'points' || def.rare ? (def.points || 10) : 0,
+      bonusDollars: def.bonusDollars || 0, dod: def.dod || '', recurring: !!def.recurring,
       status: 'none', createdAt: now(), submittedAt: null
     });
   }
@@ -281,7 +298,8 @@ function approveChore(c, auto) {
   c.status = 'approved'; c.approvedAt = now();
   const who = isKid(c.kid) ? c.kid : (isKid(c.by) ? c.by : null);
   if (who !== null) S.kids[who].xp = (S.kids[who].xp || 0) + 1;
-  S.teamPoints = (S.teamPoints || 0) + TEAM_PTS_PER_CHORE;
+  if (c.rare && who !== null) { const k = S.kids[who]; k.points = (k.points || 0) + c.points; k.weekPoints = (k.weekPoints || 0) + c.points; }
+  S.teamPoints = (S.teamPoints || 0) + TEAM_PTS_PER_CHORE + (c.rare ? c.points : 0);
   log((auto ? 'Auto-approved' : 'Approved') + ' "' + c.name + '"');
 }
 function markActive(i) {
@@ -359,11 +377,12 @@ function ring(pct, label) {
 function choreRow(c, mode) {
   // mode: 'kid' (tap circle to submit) or 'parent' (approve/reject/edit/delete)
   const display = mode === 'kid' && c.freq === 'daily' ? c.baseName : c.name;
-  const val = c.extra ? '+' + money(c.bonusDollars) : isKid(c.kid) ? money(choreValue(c.kid)) : 'shared';
+  const val = c.rare ? '+' + c.points + ' pts' : c.extra ? '+' + money(c.bonusDollars) : isKid(c.kid) ? money(choreValue(c.kid)) : 'shared';
   const meta = [];
   if (mode === 'parent' || c.kid === 'shared') meta.push(`<span class="tag ${isKid(c.kid) ? 'kid' + c.kid : 'shared'}">${esc(kidName(c.kid))}</span>`);
   if (mode === 'kid' && c.freq === 'daily' && c.day !== undefined) meta.push(`<span>${DAYS[c.day]}</span>`);
   if (c.extra) meta.push('<span class="tag extra">⭐ extra</span>');
+  if (c.rare) meta.push('<span class="tag extra">🌟 bonus points</span>');
   if (c.recurring) meta.push('<span>🔁</span>');
   if (c.status === 'pending') meta.push(`<span class="tag waiting">⏳ waiting for OK · ${hrsAgo(c.submittedAt)}</span>`);
   else if (c.status === 'approved') meta.push('<span class="tag ok">✓ approved</span>');
@@ -385,6 +404,17 @@ function choreRow(c, mode) {
     <button class="ibtn ghost" data-act="del" data-id="${c.id}" aria-label="Delete">🗑</button></div></div>`;
 }
 
+function penaltyNotice(i, parent) {
+  const ps = penaltiesFor(i);
+  if (!ps.length) return '';
+  const p = payoutParts(i);
+  const items = ps.map(x => `<div class="pen-item"><div><b>${esc(new Date(x.at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }))}</b>${x.note ? ` — “${esc(x.note)}”` : ''}</div>
+    ${parent ? `<button class="ibtn ghost" data-act="pen-del" data-id="${x.id}" title="Remove">✕</button>` : ''}</div>`).join('');
+  return `<div class="penalty"><div class="pen-head">⚠️ ${parent ? 'Disrespect this week' : 'Allowance on hold this week'}</div>
+    <div class="pen-text">${parent ? `Chore money and grade bonus are $0 (−${money(p.lost)}). Extra-credit chores can still earn up to $5 back.`
+      : `Being disrespectful to Mom or Dad wipes this week's allowance. You can still earn some back with ⭐ extra-credit chores.`}</div>${items}</div>`;
+}
+
 function allowanceCard(i, compact) {
   const p = payoutParts(i);
   const pct = Math.min(100, p.pay / S.maxPay * 100), tick = S.base / S.maxPay * 100;
@@ -394,8 +424,9 @@ function allowanceCard(i, compact) {
     <div class="money-big">${money(p.pay)}</div></div>
     <div class="bar"><div class="bar-fill ${cls}" style="width:${pct}%"></div><div class="bar-tick" style="left:${tick}%"></div></div>
     <div class="bar-labels"><span>$0</span><span>${money(S.base)} base</span><span>${money(S.maxPay)}</span></div>
+    ${penaltyNotice(i, false)}
     <div class="lines">
-      <div class="line"><span>Chores (${p.approved}/${p.total} approved · ${p.total ? money(p.val) : '—'} each)</span><span>${money(p.choreEarned)}</span></div>
+      <div class="line"><span>Chores (${p.approved}/${p.total} approved · ${p.total ? money(p.val) : '—'} each)</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
       ${p.rejected ? `<div class="line"><span>Try-again chores (${p.rejected})</span><span class="minus">−${money(S.base - p.choreEarned)}</span></div>` : ''}
       <div class="line"><span>Extra credit</span><span class="plus">+${money(p.extra)}</span></div>
       <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
@@ -612,14 +643,16 @@ function kidSummaryCard(i, small) {
     <div class="bar"><div class="bar-fill ${p.pay < S.base ? 'warn' : ''}" style="width:${pct}%;background:${p.pay < S.base ? '' : `var(--k${i})`}"></div><div class="bar-tick" style="left:${tick}%"></div></div>
     <div class="bar-labels"><span>$0</span><span>${money(S.base)}</span><span>${money(S.maxPay)}</span></div>
     <div class="mini-stats"><div class="mini"><b>${p.approved}/${p.total}</b><span>chores</span></div><div class="mini"><b>${S.kids[i].points}</b><span>points</span></div><div class="mini"><b>${mins(s.left)}</b><span>screen left</span></div></div>
+    ${penaltyNotice(i, true)}
     ${small ? '' : `<div class="lines">
-      <div class="line"><span>Chores (${p.total ? money(p.val) : '—'} each)</span><span>${money(p.choreEarned)}</span></div>
+      <div class="line"><span>Chores (${p.total ? money(p.val) : '—'} each)</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
       <div class="line"><span>Extra credit</span><span class="plus">+${money(p.extra)}</span></div>
       <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
       <div class="line total"><span>Pay this week</span><span>${money(p.pay)}</span></div></div>
     <div class="adjust"><span class="lbl">⭐ Points</span><button class="ibtn" data-act="pts" data-k="${i}" data-n="-10">−10</button><button class="ibtn" data-act="pts" data-k="${i}" data-n="-5">−5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="5">+5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="10">+10</button></div>
     <div class="adjust"><span class="lbl">📱 Screen used (${mins(s.used)}/${mins(s.total)})</span><button class="ibtn" data-act="screen" data-k="${i}" data-n="-30">−30m</button><button class="ibtn ok" data-act="screen" data-k="${i}" data-n="30">+30m</button></div>
     <div class="mt16">${gradesBlock(i)}</div>`}
+    <button class="btn block danger mt12" data-act="pen-open" data-k="${i}">⚠️ Disrespect — wipe this week's allowance</button>
   </div>`;
 }
 
@@ -643,28 +676,46 @@ function parentChoresView() {
         <div class="field"><label for="fFreq">How often</label><select id="fFreq"><option value="weekly">Once this week</option><option value="twice-weekly">2× this week</option><option value="daily">Every day (7)</option></select></div>
       </div>
       <div class="field"><label for="fDod">Done when…</label><input id="fDod" type="text" placeholder="e.g. Sheets pulled up, pillow on" maxlength="90"></div>
-      <div class="toggles">
-        <label class="toggle"><input type="checkbox" id="fExtra"> ⭐ Extra credit</label>
-        <label class="toggle"><input type="checkbox" id="fRec"> 🔁 Recurring</label>
-        <label class="toggle"><input type="checkbox" id="fBank" checked> 🏦 Save to bank</label>
+      <div class="form-row">
+        <div class="field"><label for="fPays">Pays</label><select id="fPays"><option value="allowance">Share of the $${S.base}</option><option value="extra">⭐ Extra money</option><option value="points">🌟 Bonus points (rare)</option></select></div>
+        <div class="field" id="fAmtRow" hidden><label for="fAmt" id="fAmtLbl">Amount</label><input id="fAmt" type="number" min="0.5" step="0.5" value="1"></div>
       </div>
-      <div class="field" id="fBonusRow" hidden><label for="fBonus">Bonus ($)</label><input id="fBonus" type="number" min="0.5" max="5" step="0.5" value="1"></div>
+      <div class="toggles">
+        <label class="toggle"><input type="checkbox" id="fBank" checked> 🏦 Save to bank</label>
+        <label class="toggle"><input type="checkbox" id="fBake"> 📌 Every week</label>
+      </div>
       <button class="btn block" data-act="add-chore">Add chore</button>
     </div></div>
-    <div class="card"><div class="card-title">🏦 Chore bank</div><div class="card-sub">Saved chores — pick who and add to this week.</div>
-      <div class="list mt12">${S.bank.length ? S.bank.map((b, idx) => `<div class="chore prow" style="box-shadow:none;background:#faf9fe;padding:10px">
-        <div class="ico ${icoBg[hashIdx(b.name, icoBg.length)]}" style="width:42px;height:42px;font-size:1.3rem">${choreIcon(b.name)}</div>
-        <div class="ci"><div class="cn" style="font-size:.98rem">${esc(b.name)}</div><div class="cm">${b.freq === 'daily' ? 'Daily' : b.freq === 'twice-weekly' ? '2×/wk' : 'Weekly'}${b.extra ? ' · ⭐ +' + money(b.bonusDollars) : ''}</div></div>
-        <div class="actions"><select id="bankKid_${idx}" style="width:auto;padding:8px">${kidOpts(0)}</select>
-        <button class="ibtn ok" data-act="bank-add" data-i="${idx}">+ Add</button><button class="ibtn ghost" data-act="bank-del" data-i="${idx}">🗑</button></div></div>`).join('')
-        : '<div class="empty">Chores you add with “Save to bank” show up here.</div>'}</div>
-      ${S.bank.length ? `<button class="btn block soft mt12" data-act="bank-all">+ Add all bank chores for both girls</button>` : ''}
-    </div>
+    ${bankCard(kidOpts)}
   </div><div class="col">
     <div><div class="section-title">This week's chores</div><div class="section-sub">Week of ${esc(S.week)} · ${S.chores.length} total</div></div>
     <div class="chips">${filters.map(([k, l]) => `<button class="chip ${f === k ? 'active' : ''}" data-act="filter" data-f="${k}">${esc(l)}</button>`).join('')}</div>
     <div class="list">${list.length ? list.map(c => choreRow(c, 'parent')).join('') : '<div class="card empty"><span class="big">🧺</span>No chores here.</div>'}</div>
   </div></div>`;
+}
+
+function paysLabel(b) {
+  return b.pays === 'points' ? '🌟 +' + (b.points || 10) + ' pts' : b.pays === 'extra' ? '⭐ +' + money(b.bonusDollars) : 'allowance';
+}
+function bankCard(kidOpts) {
+  const baked = S.bank.filter(b => b.auto.length);
+  const row = (b, idx) => `<div class="bank-row">
+      <div class="ico ${icoBg[hashIdx(b.name, icoBg.length)]}" style="width:42px;height:42px;font-size:1.3rem">${choreIcon(b.name)}</div>
+      <div class="ci"><div class="cn" style="font-size:.98rem">${esc(b.name)}</div>
+        <div class="cm"><span>${b.freq === 'daily' ? 'Daily' : b.freq === 'twice-weekly' ? '2×/wk' : 'Weekly'}</span><span class="dot">${paysLabel(b)}</span></div>
+        <div class="bake"><span class="bake-lbl">📌 Every week:</span>${[0, 1].map(k => `<button class="bake-chip k${k} ${b.auto.includes(k) ? 'on' : ''}" data-act="bake" data-i="${idx}" data-k="${k}">${b.auto.includes(k) ? '✓ ' : ''}${esc(S.names[k])}</button>`).join('')}</div></div>
+      <div class="actions"><select id="bankKid_${idx}" style="width:auto;padding:8px" aria-label="Add for">${kidOpts(0)}</select>
+        <button class="ibtn ok" data-act="bank-add" data-i="${idx}">+ Add</button>
+        <button class="ibtn" data-act="bank-edit" data-i="${idx}" aria-label="Edit">✏️</button>
+        <button class="ibtn ghost" data-act="bank-del" data-i="${idx}" aria-label="Delete">🗑</button></div></div>`;
+  const regular = S.bank.map((b, i) => [b, i]).filter(([b]) => b.pays !== 'points');
+  const rare = S.bank.map((b, i) => [b, i]).filter(([b]) => b.pays === 'points');
+  return `<div class="card"><div class="card-title">🏦 Chore bank</div>
+    <div class="card-sub">📌 = loads automatically every new week for that girl. Anything else, add when you need it.</div>
+    <div class="list mt12">${regular.length ? regular.map(([b, i]) => row(b, i)).join('') : '<div class="empty">Chores you add with “Save to bank” show up here.</div>'}</div>
+    ${rare.length ? `<div class="card-title mt16">🌟 Rare chores <span class="muted small">(bonus points)</span></div><div class="list mt8">${rare.map(([b, i]) => row(b, i)).join('')}</div>` : ''}
+    ${baked.length ? `<button class="btn block soft mt12" data-act="bake-load">📌 Load every-week chores now</button>` : ''}
+  </div>`;
 }
 
 function parentFamilyView() {
@@ -824,7 +875,11 @@ const A = {
   },
   reset({ id }) {
     const c = findChore(id); if (!c) return;
-    if (c.status === 'approved') S.teamPoints = Math.max(0, (S.teamPoints || 0) - TEAM_PTS_PER_CHORE);
+    if (c.status === 'approved') {
+      S.teamPoints = Math.max(0, (S.teamPoints || 0) - TEAM_PTS_PER_CHORE - (c.rare ? c.points : 0));
+      const who = isKid(c.kid) ? c.kid : (isKid(c.by) ? c.by : null);
+      if (c.rare && who !== null) { const k = S.kids[who]; k.points = Math.max(0, (k.points || 0) - c.points); k.weekPoints = Math.max(0, (k.weekPoints || 0) - c.points); }
+    }
     c.status = 'none'; c.submittedAt = null; c.approvedAt = null; commit('Reset to not done');
   },
   del({ id }) {
@@ -838,6 +893,7 @@ const A = {
       <div class="field"><label>Name</label><input id="eName" type="text" value="${esc(c.baseName)}"></div>
       <div class="field"><label>Done when…</label><input id="eDod" type="text" value="${esc(c.dod)}"></div>
       ${c.extra ? `<div class="field"><label>Bonus ($)</label><input id="eBonus" type="number" step="0.5" value="${c.bonusDollars || 1}"></div>` : ''}
+      ${c.rare ? `<div class="field"><label>Bonus points</label><input id="ePts" type="number" step="5" value="${c.points || 10}"></div>` : ''}
       <div class="small muted bold">${c.freq !== 'weekly' ? 'Updates every day of this chore for ' + esc(kidName(c.kid)) + '.' : ''}</div>
       <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn" data-act="edit-save">Save</button></div>`);
   },
@@ -850,6 +906,7 @@ const A = {
       if (x.baseName === old && x.kid === c.kid && x.freq === c.freq) {
         x.name = name + x.name.slice(old.length); x.baseName = name; x.dod = dod;
         if (bonus !== null) x.bonusDollars = bonus;
+        if (el('ePts') && x.status !== 'approved') x.points = Math.max(1, parseInt(el('ePts').value) || 10);
       }
     });
     log('Edited "' + old + '"'); closeModal(); commit('Saved');
@@ -858,10 +915,15 @@ const A = {
     const name = el('fName').value.trim();
     if (!name) { el('fName').focus(); toast('Give the chore a name'); return; }
     const kv = el('fKid').value, kid = kv === 'shared' ? 'shared' : Number(kv);
-    const def = { name, kid, freq: el('fFreq').value, dod: el('fDod').value.trim(), extra: el('fExtra').checked, recurring: el('fRec').checked, bonusDollars: el('fExtra').checked ? parseFloat(el('fBonus').value) || 1 : 0 };
+    const pays = el('fPays').value, amt = parseFloat(el('fAmt').value) || 0;
+    const def = { name, kid, freq: el('fFreq').value, dod: el('fDod').value.trim(), pays,
+      bonusDollars: pays === 'extra' ? (amt || 1) : 0, points: pays === 'points' ? Math.round(amt || 10) : 0 };
     const n = expandChore(def);
-    if (el('fBank').checked && !S.bank.some(b => b.name.toLowerCase() === name.toLowerCase())) {
-      S.bank.push({ name, freq: def.freq, extra: def.extra, bonusDollars: def.bonusDollars, dod: def.dod, recurring: def.recurring });
+    const bake = el('fBake').checked && isKid(kid);
+    if (el('fBank').checked || bake) {
+      const existing = S.bank.find(b => b.name.toLowerCase() === name.toLowerCase());
+      if (existing) { if (bake && !existing.auto.includes(kid)) existing.auto.push(kid); }
+      else S.bank.push({ name, freq: def.freq, pays, extra: pays === 'extra', bonusDollars: def.bonusDollars, points: def.points, dod: def.dod, recurring: bake, auto: bake ? [kid] : [] });
     }
     log('Added "' + name + '" for ' + kidName(kid) + (n > 1 ? ' (' + n + '×)' : ''));
     commit('Added "' + name + '"' + (n > 1 ? ' × ' + n : ''));
@@ -872,10 +934,62 @@ const A = {
     const n = expandChore({ ...b, kid });
     log('Added "' + b.name + '" from bank for ' + kidName(kid)); commit('Added "' + b.name + '" for ' + kidName(kid) + (n > 1 ? ' × ' + n : ''));
   },
-  'bank-all'() {
-    confirmModal('Add the whole bank?', 'Adds every saved chore for both ' + S.names[0] + ' and ' + S.names[1] + ' (shared chores stay shared). You can delete any you don\'t need.', 'Add all', () => {
-      let n = 0; S.bank.forEach(b => { n += expandChore({ ...b, kid: 0 }); n += expandChore({ ...b, kid: 1 }); });
-      log('Added full bank for both kids'); commit('Added ' + n + ' chores');
+  bake({ i, k }) {
+    const b = S.bank[Number(i)]; if (!b) return; k = Number(k);
+    b.auto = b.auto.includes(k) ? b.auto.filter(x => x !== k) : [...b.auto, k].sort();
+    b.recurring = b.auto.length > 0;
+    commit(b.auto.includes(k) ? '📌 ' + b.name + ' every week for ' + S.names[k] : 'Unpinned for ' + S.names[k]);
+  },
+  'bake-load'() {
+    const missing = bakedMissing();
+    if (!missing.length) { toast('Every-week chores are already on this week'); return; }
+    confirmModal('Load every-week chores?', 'Adds ' + missing.length + ' pinned chore' + (missing.length > 1 ? 's' : '') + ' that aren\'t on this week yet: ' + missing.map(m => m.b.name + ' (' + S.names[m.k] + ')').join(', ') + '.', 'Load', () => {
+      let n = 0; missing.forEach(m => { n += expandChore({ ...m.b, kid: m.k, recurring: true }); });
+      log('Loaded every-week chores'); commit('Added ' + n + ' chores');
+    });
+  },
+  'bank-edit'({ i }) {
+    const b = S.bank[Number(i)]; if (!b) return; editingBank = Number(i);
+    const opt = (v, l, cur) => `<option value="${v}" ${cur === v ? 'selected' : ''}>${l}</option>`;
+    openModal(`<div class="modal-title">✏️ Edit saved chore</div>
+      <div class="field"><label>Name</label><input id="bName" type="text" value="${esc(b.name)}"></div>
+      <div class="field"><label>Done when…</label><input id="bDod" type="text" value="${esc(b.dod)}"></div>
+      <div class="form-row"><div class="field"><label>How often</label><select id="bFreq">${opt('weekly', 'Once a week', b.freq)}${opt('twice-weekly', '2× a week', b.freq)}${opt('daily', 'Every day', b.freq)}</select></div>
+        <div class="field"><label>Pays</label><select id="bPays">${opt('allowance', 'Share of $' + S.base, b.pays)}${opt('extra', '⭐ Extra money', b.pays)}${opt('points', '🌟 Bonus points', b.pays)}</select></div></div>
+      <div class="field"><label>Extra $ / bonus points</label><input id="bAmt" type="number" step="0.5" value="${b.pays === 'points' ? b.points : b.bonusDollars || 1}"></div>
+      <div class="small muted bold">Changes apply next time it's added. Chores already on this week stay as they are.</div>
+      <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn" data-act="bank-save">Save</button></div>`);
+  },
+  'bank-save'() {
+    const b = S.bank[editingBank]; if (!b) return closeModal();
+    const name = el('bName').value.trim(); if (!name) return;
+    const pays = el('bPays').value, amt = parseFloat(el('bAmt').value) || 0;
+    Object.assign(b, { name, dod: el('bDod').value.trim(), freq: el('bFreq').value, pays, extra: pays === 'extra',
+      bonusDollars: pays === 'extra' ? (amt || 1) : 0, points: pays === 'points' ? Math.round(amt || 10) : 0 });
+    closeModal(); commit('Saved');
+  },
+
+  'pen-open'({ k }) {
+    const i = Number(k); penKid = i;
+    const p = payoutParts(i);
+    openModal(`<div class="modal-title">⚠️ Disrespect — ${esc(S.names[i])}</div>
+      <div class="muted bold">This wipes ${esc(S.names[i])}'s chore money and grade bonus for the week (${money(p.choreBefore + gradeImprovementBonus(S.kids[i]))} right now). Extra-credit chores can still earn up to $5 back. Points and screen time aren't touched.</div>
+      <div class="field"><label for="penNote">Note she'll see (optional)</label><input id="penNote" type="text" maxlength="120" placeholder="e.g. Talked back at dinner"></div>
+      <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn danger" data-act="pen-save">Wipe this week</button></div>`);
+  },
+  'pen-save'() {
+    const i = penKid; if (!isKid(i)) return closeModal();
+    const note = el('penNote').value.trim();
+    closeModal();
+    undoable(S.names[i] + "'s allowance wiped this week", () => {
+      S.penalties.push({ id: uid(), kid: i, at: now(), note });
+      log('Disrespect: ' + S.names[i] + "'s allowance wiped" + (note ? ' — ' + note : ''));
+    });
+  },
+  'pen-del'({ id }) {
+    const x = S.penalties.find(p => p.id === id); if (!x) return;
+    confirmModal('Remove this penalty?', S.names[x.kid] + "'s chore money and grade bonus come back.", 'Remove', () => {
+      S.penalties = S.penalties.filter(p => p.id !== id); log('Removed penalty for ' + S.names[x.kid]); commit('Penalty removed');
     });
   },
   'bank-del'({ i }) { const b = S.bank[Number(i)]; if (!b) return; undoable('Removed "' + b.name + '" from bank', () => { S.bank.splice(Number(i), 1); }); },
@@ -937,20 +1051,22 @@ const A = {
   },
 
   'new-week'() {
-    requirePin(() => confirmModal('Start a new week?', 'Clears this week\'s chores, resets points, screen time and the team goal, and makes current grades the new baseline. You\'ll have 30 seconds to undo.', 'Start new week', () => {
+    requirePin(() => confirmModal('Start a new week?', 'Clears this week\'s chores and any disrespect penalty, resets points, screen time and the team goal, makes current grades the new baseline, and loads the 📌 every-week chores. You\'ll have 30 seconds to undo.', 'Start new week', () => {
       const snap = JSON.stringify(S);
       S.kids.forEach(k => {
         SUBJECTS.forEach(s => { k.subjects[s].baseline = k.subjects[s].current; });
         k.points = 0; k.weekPoints = 0; k.screenMinsUsed = 0; k.screenMinsBonus = 0;
       });
       S.chores = [];
+      S.penalties = [];
       S.pointSubmissions = S.pointSubmissions.filter(p => p.status === 'pending');
       S.pendingRewards = S.pendingRewards.filter(r => r.status === 'pending');
       S.teamPoints = 0;
       S.week = weekLabel();
-      log('New week started');
+      let n = 0; S.bank.forEach(b => b.auto.forEach(k => { n += expandChore({ ...b, kid: k, recurring: true }); }));
+      log('New week started' + (n ? ' — ' + n + ' every-week chores loaded' : ''));
       save(); render();
-      toast('New week started — add chores from the bank', 'Undo', () => { S = normalize(JSON.parse(snap)); save(); render(); toast('New week undone'); }, 30000);
+      toast(n ? 'New week — ' + n + ' every-week chores loaded' : 'New week started — add chores from the bank', 'Undo', () => { S = normalize(JSON.parse(snap)); save(); render(); toast('New week undone'); }, 30000);
     }, true), 'PIN to start a new week');
   },
 
@@ -1011,7 +1127,7 @@ const A = {
   },
   'clear-test'() {
     confirmModal('Clear test data?', 'Removes this week\'s chores, claims and reward requests, and resets screen time. Names, grades, bank and menus stay.', 'Clear', () => {
-      undoable('Test data cleared', () => { S.chores = []; S.pointSubmissions = []; S.pendingRewards = []; S.teamPoints = 0; S.kids.forEach(k => { k.screenMinsUsed = 0; k.screenMinsBonus = 0; }); log('Test data cleared'); });
+      undoable('Test data cleared', () => { S.chores = []; S.penalties = []; S.pointSubmissions = []; S.pendingRewards = []; S.teamPoints = 0; S.kids.forEach(k => { k.screenMinsUsed = 0; k.screenMinsBonus = 0; }); log('Test data cleared'); });
     }, true);
   },
   'clear-all'() {
@@ -1031,6 +1147,12 @@ const A = {
   'pin-key'({ k }) { pinKey(k); },
   'toast-action'() { const f = toastAction; toastAction = null; el('toast').classList.remove('show'); if (f) f(); }
 };
+let editingBank = null, penKid = null;
+function bakedMissing() {
+  const out = [];
+  S.bank.forEach(b => b.auto.forEach(k => { if (!S.chores.some(c => c.kid === k && c.baseName.toLowerCase() === b.name.toLowerCase())) out.push({ b, k }); }));
+  return out;
+}
 let editingId = null, parentReturn = isKid(ui.who) ? ui.who : 0;
 
 async function deriveKey(pass, salt, usage) {
@@ -1048,7 +1170,13 @@ document.addEventListener('click', e => {
   try { fn({ ...t.dataset }); } catch (err) { console.error(err); toast('Something went wrong'); }
 });
 document.addEventListener('change', e => {
-  if (e.target.id === 'fExtra') el('fBonusRow').hidden = !e.target.checked;
+  if (e.target.id === 'fPays') {
+    const v = e.target.value;
+    el('fAmtRow').hidden = v === 'allowance';
+    el('fAmtLbl').textContent = v === 'points' ? 'Bonus points' : 'Extra $';
+    el('fAmt').value = v === 'points' ? 15 : 1;
+    el('fAmt').step = v === 'points' ? 5 : 0.5;
+  }
 });
 document.addEventListener('keydown', e => {
   if (el('modal').open && /^[0-9]$/.test(e.key) && el('pinDots')) pinKey(e.key);
