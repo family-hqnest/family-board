@@ -72,7 +72,8 @@ function defaultState() {
     pendingRewards: [], pointSubmissions: [],
     teamGoal: { name: 'Family pizza night', emoji: '🍕', target: 400 },
     teamPoints: 0,
-    penalties: []
+    penalties: [],
+    alertHours: [17, 20]
   };
 }
 
@@ -100,6 +101,7 @@ function normalize(s) {
   s.chores.forEach(c => {
     if (!c.id) c.id = uid();
     if (!c.status) c.status = 'none';
+    if (!c.weight) c.weight = 1;
     if (!c.baseName) c.baseName = String(c.name || '').split(' - ')[0].split(' (')[0];
     if (c.freq === 'daily' && c.day === undefined) {
       const m = / - (Mon|Tue|Wed|Thu|Fri|Sat|Sun)$/.exec(c.name || '');
@@ -110,6 +112,7 @@ function normalize(s) {
     if (!b.pays) b.pays = b.extra ? 'extra' : 'allowance';
     if (!Array.isArray(b.auto)) b.auto = [];
     if (b.pays === 'points' && !b.points) b.points = 10;
+    if (!b.weight) b.weight = 1;
     delete b.kid;
   });
   s.chores.forEach(c => { if (c.rare && !c.points) c.points = 10; });
@@ -118,6 +121,7 @@ function normalize(s) {
   if (typeof s.base !== 'number') s.base = 20;
   if (typeof s.maxPay !== 'number') s.maxPay = 30;
   if (!s.screenTimeBase) s.screenTimeBase = 360;
+  if (!Array.isArray(s.alertHours)) s.alertHours = [17, 20];
   return s;
 }
 
@@ -211,7 +215,11 @@ const tabKey = () => inParent() ? 'parent' : 'kid';
 const isRegular = c => !c.extra && !c.rare;
 const committedChores = i => S.chores.filter(c => c.kid === i && isRegular(c));
 const penaltiesFor = i => (S.penalties || []).filter(p => p.kid === i);
-function choreValue(i) { const n = committedChores(i).length; return n ? S.base / n : 0; }
+// Weight (Worth 1×/2×/3×): a 2× chore earns twice the share of a 1× chore.
+const cw = c => Math.max(1, Math.min(3, Number(c.weight) || 1));
+const totalWeight = i => committedChores(i).reduce((s, c) => s + cw(c), 0);
+function choreValue(i) { const w = totalWeight(i); return w ? S.base / w : 0; }
+const choreShare = c => isKid(c.kid) && isRegular(c) ? choreValue(c.kid) * cw(c) : 0;
 function gradeImprovementBonus(kid) {
   let b = 0;
   SUBJECTS.forEach(s => { if ((gradeRank[kid.subjects[s].current] || 0) > (gradeRank[kid.subjects[s].baseline] || 0)) b += 1.25; });
@@ -227,16 +235,18 @@ function gradeGrowthPct(kid) {
 }
 function payoutParts(i) {
   const total = committedChores(i).length, val = choreValue(i);
-  const rejected = S.chores.filter(c => c.kid === i && isRegular(c) && c.status === 'rejected').length;
+  const rejList = S.chores.filter(c => c.kid === i && isRegular(c) && c.status === 'rejected');
+  const rejected = rejList.length, rejectedAmt = rejList.reduce((s, c) => s + val * cw(c), 0);
+  const weighted = committedChores(i).some(c => cw(c) > 1);
   const penalties = penaltiesFor(i), wiped = penalties.length > 0;
-  const choreBefore = Math.max(0, S.base - rejected * val);
+  const choreBefore = Math.max(0, S.base - rejectedAmt);
   const gradeBefore = gradeImprovementBonus(S.kids[i]);
   const choreEarned = wiped ? 0 : choreBefore;
   const grade = wiped ? 0 : gradeBefore;
   const extra = Math.min(5, S.chores.filter(c => c.kid === i && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0));
   const pay = Math.max(0, Math.min(S.maxPay, choreEarned + extra + grade));
   const approved = S.chores.filter(c => c.kid === i && isRegular(c) && c.status === 'approved').length;
-  return { total, val, rejected, choreEarned, extra, grade, pay, approved, wiped, penalties, lost: wiped ? choreBefore + gradeBefore : 0, choreBefore };
+  return { total, val, weighted, rejected, choreEarned, extra, grade, pay, approved, wiped, penalties, lost: wiped ? choreBefore + gradeBefore : 0, choreBefore };
 }
 const kidPayout = i => payoutParts(i).pay;
 
@@ -274,7 +284,7 @@ function expandChore(def) {
       baseName: def.name, kid: def.kid, freq: def.freq || 'weekly',
       day: def.freq === 'daily' ? i : undefined,
       extra: def.pays ? def.pays === 'extra' : !!def.extra, rare: def.pays === 'points' || !!def.rare, points: def.pays === 'points' || def.rare ? (def.points || 10) : 0,
-      bonusDollars: def.bonusDollars || 0, dod: def.dod || '', recurring: !!def.recurring,
+      bonusDollars: def.bonusDollars || 0, weight: Math.max(1, Math.min(3, Number(def.weight) || 1)), dod: def.dod || '', recurring: !!def.recurring,
       status: 'none', createdAt: now(), submittedAt: null
     });
   }
@@ -377,10 +387,11 @@ function ring(pct, label) {
 function choreRow(c, mode) {
   // mode: 'kid' (tap circle to submit) or 'parent' (approve/reject/edit/delete)
   const display = mode === 'kid' && c.freq === 'daily' ? c.baseName : c.name;
-  const val = c.rare ? '+' + c.points + ' pts' : c.extra ? '+' + money(c.bonusDollars) : isKid(c.kid) ? money(choreValue(c.kid)) : 'shared';
+  const val = c.rare ? '+' + c.points + ' pts' : c.extra ? '+' + money(c.bonusDollars) : isKid(c.kid) ? money(choreShare(c)) : 'shared';
   const meta = [];
   if (mode === 'parent' || c.kid === 'shared') meta.push(`<span class="tag ${isKid(c.kid) ? 'kid' + c.kid : 'shared'}">${esc(kidName(c.kid))}</span>`);
   if (mode === 'kid' && c.freq === 'daily' && c.day !== undefined) meta.push(`<span>${DAYS[c.day]}</span>`);
+  if (isRegular(c) && cw(c) > 1) meta.push(`<span class="tag worth">×${cw(c)} worth</span>`);
   if (c.extra) meta.push('<span class="tag extra">⭐ extra</span>');
   if (c.rare) meta.push('<span class="tag extra">🌟 bonus points</span>');
   if (c.recurring) meta.push('<span>🔁</span>');
@@ -426,8 +437,8 @@ function allowanceCard(i, compact) {
     <div class="bar-labels"><span>$0</span><span>${money(S.base)} base</span><span>${money(S.maxPay)}</span></div>
     ${penaltyNotice(i, false)}
     <div class="lines">
-      <div class="line"><span>Chores (${p.approved}/${p.total} approved · ${p.total ? money(p.val) : '—'} each)</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
-      ${p.rejected ? `<div class="line"><span>Try-again chores (${p.rejected})</span><span class="minus">−${money(S.base - p.choreEarned)}</span></div>` : ''}
+      <div class="line"><span>Chores (${p.approved}/${p.total} approved · ${!p.total ? '—' : p.weighted ? money(p.val) + ' per 1×' : money(p.val) + ' each'})</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
+      ${p.rejected ? `<div class="line"><span>Try-again chores (${p.rejected})</span><span class="minus">−${money(S.base - p.choreBefore)}</span></div>` : ''}
       <div class="line"><span>Extra credit</span><span class="plus">+${money(p.extra)}</span></div>
       <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
       <div class="line total"><span>This week</span><span>${money(p.pay)}</span></div>
@@ -645,7 +656,7 @@ function kidSummaryCard(i, small) {
     <div class="mini-stats"><div class="mini"><b>${p.approved}/${p.total}</b><span>chores</span></div><div class="mini"><b>${S.kids[i].points}</b><span>points</span></div><div class="mini"><b>${mins(s.left)}</b><span>screen left</span></div></div>
     ${penaltyNotice(i, true)}
     ${small ? '' : `<div class="lines">
-      <div class="line"><span>Chores (${p.total ? money(p.val) : '—'} each)</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
+      <div class="line"><span>Chores (${!p.total ? '—' : p.weighted ? money(p.val) + ' per 1×' : money(p.val) + ' each'})</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
       <div class="line"><span>Extra credit</span><span class="plus">+${money(p.extra)}</span></div>
       <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
       <div class="line total"><span>Pay this week</span><span>${money(p.pay)}</span></div></div>
@@ -679,6 +690,7 @@ function parentChoresView() {
       <div class="form-row">
         <div class="field"><label for="fPays">Pays</label><select id="fPays"><option value="allowance">Share of the $${S.base}</option><option value="extra">⭐ Extra money</option><option value="points">🌟 Bonus points (rare)</option></select></div>
         <div class="field" id="fAmtRow" hidden><label for="fAmt" id="fAmtLbl">Amount</label><input id="fAmt" type="number" min="0.5" step="0.5" value="1"></div>
+        <div class="field" id="fWRow"><label for="fWeight">Worth</label><select id="fWeight">${worthOpts(1)}</select></div>
       </div>
       <div class="toggles">
         <label class="toggle"><input type="checkbox" id="fBank" checked> 🏦 Save to bank</label>
@@ -695,8 +707,9 @@ function parentChoresView() {
 }
 
 function paysLabel(b) {
-  return b.pays === 'points' ? '🌟 +' + (b.points || 10) + ' pts' : b.pays === 'extra' ? '⭐ +' + money(b.bonusDollars) : 'allowance';
+  return b.pays === 'points' ? '🌟 +' + (b.points || 10) + ' pts' : b.pays === 'extra' ? '⭐ +' + money(b.bonusDollars) : 'allowance' + (cw(b) > 1 ? ' · ×' + cw(b) + ' worth' : '');
 }
+const worthOpts = cur => [[1, '1× normal'], [2, '2× double'], [3, '3× triple']].map(([v, l]) => `<option value="${v}" ${Number(cur) === v ? 'selected' : ''}>${l}</option>`).join('');
 function bankCard(kidOpts) {
   const baked = S.bank.filter(b => b.auto.length);
   const row = (b, idx) => `<div class="bank-row">
@@ -728,9 +741,52 @@ function parentFamilyView() {
   </div>`;
 }
 
+// ── PARENT ALERTS (web push) ─────────────────────────────────
+const VAPID_PUBLIC = 'BDyrRFo9JshWVXC7ttLnvxf-Psxu6n6ycrFfDqAzcJL7aX52CE3DloWwq60M2hFicRI6pekKAdBUffSJ9olJKPc';
+const ALERTS_FN = SUPABASE_URL + '/functions/v1/parent-alerts';
+const ALERT_HOUR_CHOICES = [7, 12, 15, 17, 18, 19, 20, 21];
+let pushState = 'checking'; // checking | on | off | unsupported | install | denied
+const isStandalone = () => window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const isIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function hourLabel(h) { return (h % 12 || 12) + (h < 12 ? ' am' : ' pm'); }
+function b64uToBytes(s) { const p = '='.repeat((4 - s.length % 4) % 4); const b = atob((s + p).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from(b, c => c.charCodeAt(0)); }
+async function refreshPushState() {
+  const before = pushState;
+  if (!('serviceWorker' in navigator) || !('PushManager' in window) || !('Notification' in window)) pushState = isIOS() && !isStandalone() ? 'install' : 'unsupported';
+  else if (Notification.permission === 'denied') pushState = 'denied';
+  else {
+    try { const reg = await navigator.serviceWorker.ready; pushState = (await reg.pushManager.getSubscription()) ? 'on' : 'off'; }
+    catch (e) { pushState = 'off'; }
+  }
+  if (before !== pushState && inParent() && ui.tabs.parent === 'settings') render();
+}
+function deviceLabel() {
+  const u = navigator.userAgent;
+  return /iPad/.test(u) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1) ? 'iPad' : /iPhone/.test(u) ? 'iPhone' : /Android/.test(u) ? 'Android' : /Windows/.test(u) ? 'Windows PC' : /Mac/.test(u) ? 'Mac' : 'device';
+}
+function alertsCard() {
+  const hours = S.alertHours || [];
+  const status = {
+    checking: '<div class="card-sub">Checking this device…</div>',
+    on: '<div class="alert-on">✓ Alerts are on for this device</div>',
+    off: '<div class="card-sub">Get one notification at the times below listing what is waiting for your OK. Nothing waiting = no notification.</div>',
+    unsupported: '<div class="card-sub">This browser can\'t receive notifications. Try Safari on iPhone/iPad (from the Home Screen icon) or Chrome/Edge on a computer.</div>',
+    install: `<div class="install-tip"><b>One-time setup on iPhone/iPad:</b><ol><li>Tap the Share button <span class="kbd">⬆︎</span> in Safari</li><li>Choose <b>Add to Home Screen</b></li><li>Open Chore Club from the new icon, go to Parent → Settings, and turn alerts on here.</li></ol></div>`,
+    denied: '<div class="card-sub">Notifications are blocked for Chore Club. Turn them on in your device Settings → Notifications → Chore Club, then come back.</div>'
+  }[pushState];
+  const btns = pushState === 'on'
+    ? `<div class="btn-row mt12"><button class="btn sm" data-act="push-test">Send test alert</button><button class="btn sm white" data-act="push-off">Turn off on this device</button></div>`
+    : pushState === 'off' ? `<button class="btn block mt12" data-act="push-on">🔔 Turn on alerts on this ${esc(deviceLabel())}</button>` : '';
+  return `<div class="card"><div class="card-title">🔔 Approval alerts</div>${status}${btns}
+    <div class="field mt16"><label>Send a summary at (Eastern)</label><div class="chips wrap">${ALERT_HOUR_CHOICES.map(h => `<button class="chip ${hours.includes(h) ? 'active' : ''}" data-act="alert-hour" data-h="${h}">${hourLabel(h)}</button>`).join('')}</div></div>
+    <div class="small muted">Times apply to every parent device. Turn alerts on separately on each phone or iPad you want them on.</div></div>`;
+}
+
 function parentSettingsView() {
   const g = S.teamGoal;
+  if (pushState === 'checking') refreshPushState();
   return `<div class="split even"><div class="col">
+    ${alertsCard()}
     <div class="card"><div class="card-title">👭 Family & allowance</div><div class="form mt12">
       <div class="form-row"><div class="field"><label>Kid 1 name</label><input id="sName0" type="text" value="${esc(S.names[0])}"></div><div class="field"><label>Emoji</label><input id="sEmo0" type="text" value="${esc(S.emojis[0])}"></div></div>
       <div class="form-row"><div class="field"><label>Kid 2 name</label><input id="sName1" type="text" value="${esc(S.names[1])}"></div><div class="field"><label>Emoji</label><input id="sEmo1" type="text" value="${esc(S.emojis[1])}"></div></div>
@@ -892,6 +948,7 @@ const A = {
     openModal(`<div class="modal-title">✏️ Edit chore</div>
       <div class="field"><label>Name</label><input id="eName" type="text" value="${esc(c.baseName)}"></div>
       <div class="field"><label>Done when…</label><input id="eDod" type="text" value="${esc(c.dod)}"></div>
+      ${isRegular(c) ? `<div class="field"><label>Worth</label><select id="eWeight">${worthOpts(cw(c))}</select><div class="small muted mt8">2× earns twice a normal chore's share of the $${S.base}.</div></div>` : ''}
       ${c.extra ? `<div class="field"><label>Bonus ($)</label><input id="eBonus" type="number" step="0.5" value="${c.bonusDollars || 1}"></div>` : ''}
       ${c.rare ? `<div class="field"><label>Bonus points</label><input id="ePts" type="number" step="5" value="${c.points || 10}"></div>` : ''}
       <div class="small muted bold">${c.freq !== 'weekly' ? 'Updates every day of this chore for ' + esc(kidName(c.kid)) + '.' : ''}</div>
@@ -906,9 +963,12 @@ const A = {
       if (x.baseName === old && x.kid === c.kid && x.freq === c.freq) {
         x.name = name + x.name.slice(old.length); x.baseName = name; x.dod = dod;
         if (bonus !== null) x.bonusDollars = bonus;
+        if (el('eWeight')) x.weight = Number(el('eWeight').value) || 1;
         if (el('ePts') && x.status !== 'approved') x.points = Math.max(1, parseInt(el('ePts').value) || 10);
       }
     });
+    const bk = el('eWeight') && S.bank.find(b => b.name.toLowerCase() === old.toLowerCase());
+    if (bk) bk.weight = Number(el('eWeight').value) || 1;
     log('Edited "' + old + '"'); closeModal(); commit('Saved');
   },
   'add-chore'() {
@@ -916,14 +976,15 @@ const A = {
     if (!name) { el('fName').focus(); toast('Give the chore a name'); return; }
     const kv = el('fKid').value, kid = kv === 'shared' ? 'shared' : Number(kv);
     const pays = el('fPays').value, amt = parseFloat(el('fAmt').value) || 0;
-    const def = { name, kid, freq: el('fFreq').value, dod: el('fDod').value.trim(), pays,
+    const weight = pays === 'allowance' ? Number(el('fWeight').value) || 1 : 1;
+    const def = { name, kid, freq: el('fFreq').value, dod: el('fDod').value.trim(), pays, weight,
       bonusDollars: pays === 'extra' ? (amt || 1) : 0, points: pays === 'points' ? Math.round(amt || 10) : 0 };
     const n = expandChore(def);
     const bake = el('fBake').checked && isKid(kid);
     if (el('fBank').checked || bake) {
       const existing = S.bank.find(b => b.name.toLowerCase() === name.toLowerCase());
       if (existing) { if (bake && !existing.auto.includes(kid)) existing.auto.push(kid); }
-      else S.bank.push({ name, freq: def.freq, pays, extra: pays === 'extra', bonusDollars: def.bonusDollars, points: def.points, dod: def.dod, recurring: bake, auto: bake ? [kid] : [] });
+      else S.bank.push({ name, freq: def.freq, pays, extra: pays === 'extra', bonusDollars: def.bonusDollars, points: def.points, weight, dod: def.dod, recurring: bake, auto: bake ? [kid] : [] });
     }
     log('Added "' + name + '" for ' + kidName(kid) + (n > 1 ? ' (' + n + '×)' : ''));
     commit('Added "' + name + '"' + (n > 1 ? ' × ' + n : ''));
@@ -956,7 +1017,8 @@ const A = {
       <div class="field"><label>Done when…</label><input id="bDod" type="text" value="${esc(b.dod)}"></div>
       <div class="form-row"><div class="field"><label>How often</label><select id="bFreq">${opt('weekly', 'Once a week', b.freq)}${opt('twice-weekly', '2× a week', b.freq)}${opt('daily', 'Every day', b.freq)}</select></div>
         <div class="field"><label>Pays</label><select id="bPays">${opt('allowance', 'Share of $' + S.base, b.pays)}${opt('extra', '⭐ Extra money', b.pays)}${opt('points', '🌟 Bonus points', b.pays)}</select></div></div>
-      <div class="field"><label>Extra $ / bonus points</label><input id="bAmt" type="number" step="0.5" value="${b.pays === 'points' ? b.points : b.bonusDollars || 1}"></div>
+      <div class="form-row"><div class="field"><label>Extra $ / bonus points</label><input id="bAmt" type="number" step="0.5" value="${b.pays === 'points' ? b.points : b.bonusDollars || 1}"></div>
+        <div class="field"><label>Worth (allowance chores)</label><select id="bWeight">${worthOpts(cw(b))}</select></div></div>
       <div class="small muted bold">Changes apply next time it's added. Chores already on this week stay as they are.</div>
       <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn" data-act="bank-save">Save</button></div>`);
   },
@@ -965,7 +1027,8 @@ const A = {
     const name = el('bName').value.trim(); if (!name) return;
     const pays = el('bPays').value, amt = parseFloat(el('bAmt').value) || 0;
     Object.assign(b, { name, dod: el('bDod').value.trim(), freq: el('bFreq').value, pays, extra: pays === 'extra',
-      bonusDollars: pays === 'extra' ? (amt || 1) : 0, points: pays === 'points' ? Math.round(amt || 10) : 0 });
+      bonusDollars: pays === 'extra' ? (amt || 1) : 0, points: pays === 'points' ? Math.round(amt || 10) : 0,
+      weight: pays === 'allowance' ? Number(el('bWeight').value) || 1 : 1 });
     closeModal(); commit('Saved');
   },
 
@@ -1140,6 +1203,47 @@ const A = {
     a.href = URL.createObjectURL(new Blob([(S.logs || []).join('\n')], { type: 'text/plain' }));
     a.download = 'chore-club-log-' + dateKey() + '.txt'; a.click();
   },
+  async 'push-on'() {
+    try {
+      if (isIOS() && !isStandalone()) { pushState = 'install'; render(); return; }
+      const perm = await Notification.requestPermission();
+      if (perm !== 'granted') { pushState = perm === 'denied' ? 'denied' : 'off'; render(); toast('Notifications weren\'t allowed'); return; }
+      const reg = await navigator.serviceWorker.ready;
+      const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64uToBytes(VAPID_PUBLIC) });
+      const j = sub.toJSON();
+      const r = await fetch(SUPABASE_URL + '/rest/v1/push_subs', { method: 'POST',
+        headers: { ...db.h, Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({ endpoint: j.endpoint, sub: j, label: deviceLabel() }) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      pushState = 'on'; log('Turned on alerts on ' + deviceLabel()); render(); toast('🔔 Alerts on — sending a test…');
+      A['push-test'](true);
+    } catch (e) { console.error(e); toast('Couldn\'t turn on alerts — check your connection'); refreshPushState(); }
+  },
+  async 'push-off'() {
+    try {
+      const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+      if (sub) {
+        await fetch(SUPABASE_URL + '/rest/v1/push_subs?endpoint=eq.' + encodeURIComponent(sub.endpoint), { method: 'DELETE', headers: db.h });
+        await sub.unsubscribe();
+      }
+      pushState = 'off'; render(); toast('Alerts off on this device');
+    } catch (e) { console.error(e); toast('Couldn\'t turn off alerts'); }
+  },
+  async 'push-test'(quiet) {
+    try {
+      await flush();
+      const r = await fetch(ALERTS_FN, { method: 'POST', headers: { ...db.h }, body: JSON.stringify({ mode: 'test' }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || r.status);
+      if (quiet !== true) toast(j.sent ? '🔔 Test sent to ' + j.sent + ' device' + (j.sent > 1 ? 's' : '') : 'No devices have alerts on yet');
+    } catch (e) { console.error(e); toast('Test alert failed'); }
+  },
+  'alert-hour'({ h }) {
+    h = Number(h);
+    const cur = S.alertHours || [];
+    S.alertHours = cur.includes(h) ? cur.filter(x => x !== h) : [...cur, h].sort((a, b) => a - b);
+    commit(S.alertHours.length ? 'Alerts at ' + S.alertHours.map(hourLabel).join(', ') : 'No alert times — notifications paused');
+  },
   lock() { parentUnlocked = false; sessionStorage.removeItem('cc-parent'); ui.who = parentReturn ?? 0; saveUI(); render(); toast('Parent mode locked'); },
 
   'modal-close'() { pinCb = null; confirmCb = null; closeModal(); },
@@ -1173,6 +1277,7 @@ document.addEventListener('change', e => {
   if (e.target.id === 'fPays') {
     const v = e.target.value;
     el('fAmtRow').hidden = v === 'allowance';
+    el('fWRow').hidden = v !== 'allowance';
     el('fAmtLbl').textContent = v === 'points' ? 'Bonus points' : 'Extra $';
     el('fAmt').value = v === 'points' ? 15 : 1;
     el('fAmt').step = v === 'points' ? 5 : 0.5;
@@ -1194,8 +1299,16 @@ async function init() {
   cacheLocal();
   if (ui.who === 'parent' && !parentUnlocked) ui.who = parentReturn;
   render();
+  if (new URLSearchParams(location.search).get('parent') === 'inbox') {
+    history.replaceState(null, '', location.pathname);
+    ui.tabs.parent = 'inbox';
+    if (inParent()) render(); else A.who({ who: 'parent' });
+  }
   setInterval(pull, PULL_EVERY);
   setInterval(() => { if (!document.hidden) render(); }, 5 * 60000); // keep "Xh ago" & today's list fresh
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => {
+    if (e.data && e.data.type === 'open-inbox') { ui.tabs.parent = 'inbox'; if (inParent()) { pull(); render(); } else A.who({ who: 'parent' }); }
+  });
 }
 init();
