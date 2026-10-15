@@ -347,3 +347,12 @@ s.muted { text-decoration-thickness: 2px; }
 .install-tip ol { margin: 6px 0 0; padding-left: 20px; }
 .kbd { display: inline-block; padding: 0 6px; border-radius: 6px; background: #fff; border: 1px solid rgba(0,0,0,.12); }
 .chips.wrap { flex-wrap: wrap; overflow: visible; }
+
+/* ── Sent back / missed ── */
+.rej-note { margin-top: 6px; padding: 6px 10px; border-radius: 10px; background: var(--red-soft); color: var(--red); font-weight: 700; font-size: .85rem; line-height: 1.35; }
+.sentback { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; padding: 14px 16px; border-radius: var(--radius); border: 2px solid #f5a3b8; background: var(--red-soft); color: var(--ink); font: inherit; cursor: pointer; }
+.sentback .sb-ico { width: 40px; height: 40px; border-radius: 12px; background: #fff; color: var(--red); display: grid; place-items: center; font-weight: 900; font-size: 1.2rem; flex-shrink: 0; }
+.sentback .sb-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: .88rem; font-weight: 600; color: var(--ink-2); }
+.sentback .sb-txt b { color: var(--red); font-size: 1rem; font-weight: 900; }
+.sentback .sb-go { font-weight: 900; color: var(--red); white-space: nowrap; }
+.pill.lost { background: var(--red-soft); color: var(--red); opacity: .8; }

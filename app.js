@@ -291,6 +291,8 @@ function expandChore(def) {
   return n;
 }
 
+// Daily chores from earlier days this week that were never checked off.
+const overdueChores = () => S.chores.filter(c => c.status === 'none' && c.freq === 'daily' && c.day !== undefined && c.day < todayIdx());
 function log(msg) { S.logs = [new Date().toLocaleString() + ': ' + msg, ...(S.logs || [])].slice(0, 150); }
 const kidName = k => isKid(k) ? S.names[k] : 'Shared';
 
@@ -305,7 +307,7 @@ function autoApprove() {
   if (changed) save();
 }
 function approveChore(c, auto) {
-  c.status = 'approved'; c.approvedAt = now();
+  c.status = 'approved'; c.approvedAt = now(); c.missed = false; c.note = '';
   const who = isKid(c.kid) ? c.kid : (isKid(c.by) ? c.by : null);
   if (who !== null) S.kids[who].xp = (S.kids[who].xp || 0) + 1;
   if (c.rare && who !== null) { const k = S.kids[who]; k.points = (k.points || 0) + c.points; k.weekPoints = (k.weekPoints || 0) + c.points; }
@@ -397,19 +399,21 @@ function choreRow(c, mode) {
   if (c.recurring) meta.push('<span>🔁</span>');
   if (c.status === 'pending') meta.push(`<span class="tag waiting">⏳ waiting for OK · ${hrsAgo(c.submittedAt)}</span>`);
   else if (c.status === 'approved') meta.push('<span class="tag ok">✓ approved</span>');
-  else if (c.status === 'rejected') meta.push('<span class="tag no">↺ try again</span>');
+  else if (c.status === 'rejected') meta.push(c.missed ? '<span class="tag no">✗ missed</span>' : '<span class="tag no">↺ try again</span>');
   if (c.dod) meta.push(`<span class="${meta.length ? 'dot' : ''}">${esc(c.dod)}</span>`);
   const kidCls = isKid(c.kid) ? KID_CLS[c.kid] : '';
   const icon = `<div class="ico ${icoBg[hashIdx(c.baseName, icoBg.length)]}">${choreIcon(c.baseName)}</div>`;
-  const body = `<div class="ci"><div class="cn">${esc(display)}</div><div class="cm">${meta.join('')}</div></div>`;
+  const note = c.status === 'rejected' && c.note ? `<div class="rej-note">💬 ${esc(c.note)}</div>` : '';
+  const body = `<div class="ci"><div class="cn">${esc(display)}</div><div class="cm">${meta.join('')}</div>${note}</div>`;
   if (mode === 'kid') {
-    const glyph = { none: '', pending: '⏳', approved: '✓', rejected: '↺' }[c.status] || '';
-    return `<div class="chore status-${c.status}">${icon}${body}<span class="pill ${c.status === 'approved' ? 'green' : ''}">${val}</span>
+    const glyph = c.missed && c.status === 'rejected' ? '✗' : { none: '', pending: '⏳', approved: '✓', rejected: '↺' }[c.status] || '';
+    return `<div class="chore status-${c.status}">${icon}${body}<span class="pill ${c.status === 'approved' ? 'green' : c.status === 'rejected' ? 'lost' : ''}">${c.status === 'rejected' ? '<s>' + val + '</s>' : val}</span>
       <button class="check ${c.status}" data-act="kid-toggle" data-id="${c.id}" aria-label="Mark ${esc(display)} done">${glyph}</button></div>`;
   }
   const acts = c.status === 'pending'
     ? `<button class="ibtn ok" data-act="approve" data-id="${c.id}" aria-label="Approve">✓</button><button class="ibtn no" data-act="reject" data-id="${c.id}" aria-label="Reject">✗</button>`
-    : c.status !== 'none' ? `<button class="ibtn" data-act="reset" data-id="${c.id}" title="Reset">↺</button>` : '';
+    : c.status === 'none' ? `<button class="ibtn ok" data-act="mark-done" data-id="${c.id}" title="Mark done" aria-label="Mark done">✓</button><button class="ibtn no" data-act="miss" data-id="${c.id}" title="Mark not finished" aria-label="Mark not finished">✗</button>`
+    : (c.status === 'rejected' ? `<button class="ibtn" data-act="note-open" data-id="${c.id}" title="Add a note" aria-label="Add a note">💬</button>` : '') + `<button class="ibtn" data-act="reset" data-id="${c.id}" title="Reset to not done" aria-label="Reset">↺</button>`;
   return `<div class="chore prow ${kidCls} status-${c.status}">${icon}${body}<div class="actions">${acts}
     <button class="ibtn" data-act="edit" data-id="${c.id}" aria-label="Edit">✏️</button>
     <button class="ibtn ghost" data-act="del" data-id="${c.id}" aria-label="Delete">🗑</button></div></div>`;
@@ -511,7 +515,8 @@ function kidTodayView(i) {
     : 'All done for today! 🎉 Go enjoy yourself.';
   const seg = ui.seg;
   const week = kidChores(i);
-  const shown = seg === 'todo' ? week.filter(c => !isDoneish(c)) : seg === 'done' ? week.filter(isDoneish) : list;
+  const shown = seg === 'todo' ? week.filter(c => !isDoneish(c) && !c.missed) : seg === 'done' ? week.filter(isDoneish) : list;
+  const sentBack = week.filter(c => c.status === 'rejected');
   const order = { rejected: 0, none: 1, pending: 2, approved: 3 };
   shown.sort((a, b) => order[a.status] - order[b.status]);
   const lvl = LEVELS[Math.min(Math.floor((S.kids[i].xp || 0) / 25), LEVELS.length - 1)];
@@ -528,7 +533,12 @@ function kidTodayView(i) {
     <div class="wide-only col">${allowanceCard(i)}${screenCard(i)}</div>
   </div>`;
 
+  const tryN = sentBack.filter(c => !c.missed).length, missN = sentBack.length - tryN;
+  const banner = sentBack.length ? `<button class="sentback" data-act="tab" data-tab="chores">
+      <span class="sb-ico">${tryN ? '↺' : '✗'}</span><span class="sb-txt"><b>${[tryN ? tryN + ' to try again' : '', missN ? missN + ' marked missed' : ''].filter(Boolean).join(' · ')}</b>
+      <span>${sentBack.slice(0, 2).map(c => esc(c.freq === 'daily' && c.day !== undefined ? c.baseName + ' (' + DAYS[c.day] + ')' : c.name) + (c.note ? ' — “' + esc(c.note) + '”' : '')).join('<br>')}${sentBack.length > 2 ? '<br>+' + (sentBack.length - 2) + ' more' : ''}</span></span><span class="sb-go">See all ›</span></button>` : '';
   const right = `<div class="col">
+    ${banner}
     <div><div class="section-title">Your to-dos ✨</div><div class="section-sub">Each checkmark is a little win.</div></div>
     <div class="seg">${[['today', 'Today'], ['todo', 'To do'], ['done', 'Done']].map(([k, l]) => `<button class="${seg === k ? 'active' : ''}" data-act="seg" data-seg="${k}">${l}</button>`).join('')}</div>
     <div class="list">${shown.length ? shown.map(c => choreRow(c, 'kid')).join('') : `<div class="card empty"><span class="big">${seg === 'done' ? '🌱' : '🎉'}</span>${seg === 'done' ? 'Nothing checked off yet.' : 'Nothing here — nice!'}</div>`}</div>
@@ -542,16 +552,17 @@ function kidTodayView(i) {
 function kidChoresView(i) {
   const week = kidChores(i);
   const groups = [
-    ['rejected', '↺ Try again', 'A parent sent these back — give them another go.'],
-    ['none', '📝 To do', ''],
-    ['pending', '⏳ Waiting for a parent', ''],
-    ['approved', '✅ Done & approved', '']
+    [c => c.status === 'rejected' && !c.missed, '↺ Try again', 'A parent sent these back — fix them up and tap the circle again.'],
+    [c => c.status === 'rejected' && c.missed, '✗ Missed', "A parent marked these as not done. They don't count toward your allowance this week."],
+    [c => c.status === 'none', '📝 To do', ''],
+    [c => c.status === 'pending', '⏳ Waiting for a parent', ''],
+    [c => c.status === 'approved', '✅ Done & approved', '']
   ];
   const mySubs = S.pointSubmissions.filter(p => p.kidIdx === i && p.status === 'pending');
   const left = `<div class="col">
     <div><div class="section-title">My chores</div><div class="section-sub">Week of ${esc(S.week)} · ${week.length} total</div></div>
     ${week.length ? groups.map(([st, title, sub]) => {
-      const items = week.filter(c => c.status === st);
+      const items = week.filter(st);
       if (!items.length) return '';
       return `<div class="list"><div><div class="card-title">${title} <span class="muted small">(${items.length})</span></div>${sub ? `<div class="card-sub">${sub}</div>` : ''}</div>${items.map(c => choreRow(c, 'kid')).join('')}</div>`;
     }).join('') : '<div class="card empty"><span class="big">🗓️</span>No chores assigned yet this week.</div>'}
@@ -669,7 +680,7 @@ function kidSummaryCard(i, small) {
 
 function parentChoresView() {
   const f = ui.filter;
-  const filters = [['all', 'All'], ['pending', 'Waiting'], ['notdone', 'Not done'], ['approved', 'Approved'], ['rejected', 'Try again'], ['k0', S.names[0]], ['k1', S.names[1]], ['shared', 'Shared']];
+  const filters = [['all', 'All'], ['pending', 'Waiting'], ['notdone', 'Not done'], ['approved', 'Approved'], ['rejected', 'Sent back / missed'], ['k0', S.names[0]], ['k1', S.names[1]], ['shared', 'Shared']];
   let list = [...S.chores];
   if (f === 'pending') list = list.filter(c => c.status === 'pending');
   if (f === 'notdone') list = list.filter(c => c.status === 'none');
@@ -701,6 +712,7 @@ function parentChoresView() {
     ${bankCard(kidOpts)}
   </div><div class="col">
     <div><div class="section-title">This week's chores</div><div class="section-sub">Week of ${esc(S.week)} · ${S.chores.length} total</div></div>
+    ${overdueChores().length ? `<button class="btn block soft" data-act="miss-overdue">✗ Mark ${overdueChores().length} unchecked from earlier days as not finished</button>` : ''}
     <div class="chips">${filters.map(([k, l]) => `<button class="chip ${f === k ? 'active' : ''}" data-act="filter" data-f="${k}">${esc(l)}</button>`).join('')}</div>
     <div class="list">${list.length ? list.map(c => choreRow(c, 'parent')).join('') : '<div class="card empty"><span class="big">🧺</span>No chores here.</div>'}</div>
   </div></div>`;
@@ -915,6 +927,7 @@ const A = {
     const c = findChore(id); if (!c) return;
     const me = isKid(ui.who) ? ui.who : 0;
     if (c.status === 'approved') { toast('Already approved ✓'); return; }
+    if (c.status === 'rejected' && c.missed) { toast('A parent marked this as missed — ask them if you can make it up'); return; }
     if (c.status === 'pending') { c.status = 'none'; c.submittedAt = null; log(S.names[me] + ' un-checked "' + c.name + '"'); commit('Undone — no worries'); return; }
     c.status = 'pending'; c.submittedAt = now(); c.by = me; markActive(me);
     log(S.names[me] + ' finished "' + c.name + '"');
@@ -924,7 +937,46 @@ const A = {
     else toast('Nice! Sent to a parent for a ✓');
   },
   approve({ id }) { const c = findChore(id); if (!c) return; approveChore(c); confetti(); commit('Approved ✓'); },
-  reject({ id }) { const c = findChore(id); if (!c) return; c.status = 'rejected'; c.rejectedAt = now(); log('Sent back "' + c.name + '"'); commit('Sent back to try again'); },
+  reject({ id }) {
+    const c = findChore(id); if (!c) return;
+    c.status = 'rejected'; c.missed = false; c.note = ''; c.rejectedAt = now();
+    log('Sent back "' + c.name + '"'); save(); render();
+    toast('Sent back to try again', 'Add reason', () => A['note-open']({ id }));
+  },
+  miss({ id }) {
+    const c = findChore(id); if (!c) return;
+    c.status = 'rejected'; c.missed = true; c.note = ''; c.rejectedAt = now(); c.submittedAt = null;
+    log('Marked "' + c.name + '" not finished'); save(); render();
+    toast('Marked not finished', 'Add reason', () => A['note-open']({ id }));
+  },
+  'mark-done'({ id }) {
+    const c = findChore(id); if (!c) return;
+    if (!isKid(c.by)) c.by = isKid(c.kid) ? c.kid : undefined;
+    c.submittedAt = c.submittedAt || now(); approveChore(c);
+    log('Parent marked "' + c.name + '" done'); commit('Marked done ✓');
+  },
+  'miss-overdue'() {
+    const list = overdueChores();
+    if (!list.length) return toast('Nothing overdue');
+    confirmModal('Mark ' + list.length + ' as not finished?', 'These daily chores from earlier days were never checked off: ' + [...new Set(list.map(c => c.baseName + ' (' + kidName(c.kid) + ')'))].join(', ') + '. They\'ll lose their share of the allowance. You can undo any one with ↺.', 'Mark not finished', () => {
+      const t = now(); list.forEach(c => { c.status = 'rejected'; c.missed = true; c.note = ''; c.rejectedAt = t; });
+      log('Marked ' + list.length + ' overdue chores not finished');
+      save(); render();
+      toast(list.length + ' marked not finished', 'Undo', () => { list.forEach(c => { c.status = 'none'; c.missed = false; c.rejectedAt = null; }); commit('Undone'); });
+    }, true);
+  },
+  'note-open'({ id }) {
+    const c = findChore(id); if (!c) return; editingId = id;
+    openModal(`<div class="modal-title">💬 Note for ${esc(kidName(c.kid))}</div>
+      <div class="muted bold">${esc(c.name)} · ${c.missed ? 'marked not finished' : 'sent back to try again'}</div>
+      <div class="field"><label for="rejNote">What she'll see</label><input id="rejNote" type="text" maxlength="120" value="${esc(c.note || '')}" placeholder="${c.missed ? 'e.g. Bed wasn\'t made before school' : 'e.g. Clothes still on the floor'}"></div>
+      <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn" data-act="note-save">Save note</button></div>`);
+    setTimeout(() => el('rejNote') && el('rejNote').focus(), 50);
+  },
+  'note-save'() {
+    const c = findChore(editingId); if (!c) return closeModal();
+    c.note = el('rejNote').value.trim(); closeModal(); commit(c.note ? 'Note added' : 'Note removed');
+  },
   'approve-all'() {
     const list = S.chores.filter(c => c.status === 'pending');
     list.forEach(c => approveChore(c)); confetti(); commit('Approved ' + list.length + ' chores ✓');
@@ -936,7 +988,7 @@ const A = {
       const who = isKid(c.kid) ? c.kid : (isKid(c.by) ? c.by : null);
       if (c.rare && who !== null) { const k = S.kids[who]; k.points = Math.max(0, (k.points || 0) - c.points); k.weekPoints = Math.max(0, (k.weekPoints || 0) - c.points); }
     }
-    c.status = 'none'; c.submittedAt = null; c.approvedAt = null; commit('Reset to not done');
+    c.status = 'none'; c.submittedAt = null; c.approvedAt = null; c.missed = false; c.note = ''; commit('Reset to not done');
   },
   del({ id }) {
     const c = findChore(id); if (!c) return;

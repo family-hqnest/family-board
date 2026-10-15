@@ -1,7 +1,7 @@
 // Chore Club service worker — network first, cache as fallback so the
 // app always shows the newest version when online and still opens offline.
-const CACHE = 'choreclub-v4';
-const SHELL = ['./', './index.html', './style.css?v=4', './app.js?v=4', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'choreclub-v5';
+const SHELL = ['./', './index.html', './style.css?v=5', './app.js?v=5', './manifest.json', './icons/icon-192.png', './icons/icon-512.png'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL)).then(() => self.skipWaiting()));
