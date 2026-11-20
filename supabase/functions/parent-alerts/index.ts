@@ -37,7 +37,8 @@ Deno.serve(async (req) => {
   const counts = [0, 1].map((k) =>
     (d.chores || []).filter((c: any) => c.kid === k && c.status === "pending").length +
     (d.pointSubmissions || []).filter((p: any) => p.kidIdx === k && p.status === "pending").length +
-    (d.pendingRewards || []).filter((r: any) => r.kidIdx === k && r.status === "pending").length
+    (d.pendingRewards || []).filter((r: any) => r.kidIdx === k && r.status === "pending").length +
+    (d.questLog || []).filter((q: any) => q.kid === k && q.status === "pending").length
   );
   const total = counts[0] + counts[1];
 

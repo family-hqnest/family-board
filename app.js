@@ -33,6 +33,131 @@ const isKid   = k => k === 0 || k === 1;
 const hrsAgo  = ts => { const h = Math.floor((now() - ts) / 3600000); return h < 1 ? 'just now' : h < 24 ? h + 'h ago' : Math.floor(h / 24) + 'd ago'; };
 const mins    = m => { m = Math.max(0, Math.round(m)); const h = Math.floor(m / 60), r = m % 60; return h ? h + 'h' + (r ? ' ' + r + 'm' : '') : r + 'm'; };
 
+// ── REFLECTION PROMPTS (Decision Card & confidence builders) ──
+const REFLECT = {
+  decision: { title: '🧭 Decision Card', intro: 'Think it through. A parent reads this before approving.', qs: [
+    ['options', 'What were your choices?', 'e.g. Finish my project first, or go to the park'],
+    ['pick', 'What did you pick, and why?', 'The reason matters more than the choice'],
+    ['result', 'How did it turn out? Would you choose the same again?', ''] ] },
+  brave: { title: '🦁 One brave thing', intro: 'Something a little uncomfortable counts. Big or small.', qs: [
+    ['what', 'What brave thing did you do?', 'e.g. Ordered my own food, called Grandma, tried a new food'],
+    ['before', 'How did you feel before?', ''],
+    ['after', 'How do you feel now?', ''] ] },
+  charge: { title: '👑 Kid in charge', intro: 'You planned it, you ran it. Tell us how it went.', qs: [
+    ['plan', 'What did you plan?', 'e.g. Game night with snacks, a park picnic'],
+    ['budget', 'What was the budget, and how did you stay in it?', ''],
+    ['next', 'What went well, and what would you change next time?', ''] ] },
+  teach: { title: '🍎 Teach the family', intro: 'The best way to learn something is to teach it.', qs: [
+    ['topic', 'What did you teach us?', ''],
+    ['how', 'How did you explain it?', ''],
+    ['q', 'What question did someone ask you?', ''] ] }
+};
+const REFLECT_KEYS = Object.keys(REFLECT);
+
+// ── BREAK-WEEK CHORE SET (added to the bank once) ──
+const BREAK_SET = [
+  { name: 'Holiday helper', freq: 'twice-weekly', weight: 1, dod: '30+ min helping decorate, wrap gifts, bake or set the table, then clean up' },
+  { name: 'Big home project', freq: 'weekly', weight: 2, dod: 'Closet clean-out with a donate bag, help wash the car, or deep-clean a room. Show a parent before and after' },
+  { name: 'Help cook a family meal', freq: 'weekly', weight: 2, dod: 'Help from prep to cleanup' },
+  { name: 'Decision Card', freq: 'twice-weekly', weight: 2, reflect: 'decision', dod: 'Make a real choice, then answer the 3 questions' },
+  { name: 'One brave thing', freq: 'twice-weekly', weight: 1, reflect: 'brave', dod: 'Order your own food, call someone, ask a question, or try something new' },
+  { name: 'Kid in charge', freq: 'weekly', weight: 3, reflect: 'charge', dod: 'Plan and run part of a family day within the budget a parent gives you' },
+  { name: 'Teach the family', freq: 'weekly', weight: 1, reflect: 'teach', dod: 'Learn something and teach it to us in 5 minutes' }
+];
+// School-set chores that also stay on during breaks.
+const BREAK_KEEP = ['clean room', 'morning routine', 'load dishwasher', 'call family members', 'clean and organize doll house(s)', 'put away clothes', 'bedtime routine', 'make bed', 'read for 25 minutes'];
+
+// ── SKILL QUESTS ──
+const QUEST_TRACKS = [
+  { id: 'basics', name: 'Computer basics', icon: '💻', badge: 'Power User' },
+  { id: 'safe', name: 'Stay safe online', icon: '🛡️', badge: 'Cyber Guardian' },
+  { id: 'ai', name: 'AI smarts', icon: '🤖', badge: 'AI Navigator' },
+  { id: 'make', name: 'Make something', icon: '🛠️', badge: 'Creator' }
+];
+const QUESTS = [
+  // Computer basics
+  { id: 'b1', track: 'basics', title: 'Know your machine', pay: 1, mins: 15,
+    steps: ['On your iPad or computer, find Settings → General → About (or This PC on Windows).', 'Find: the device name, the operating system and its version, and how much storage is free.', 'Learn the difference: an app vs. a file vs. a folder vs. the browser.'],
+    ask: 'What device did you check, what version is it on, and how much storage is free?' },
+  { id: 'b2', track: 'basics', title: 'Files & folders boss', pay: 1, mins: 20,
+    steps: ['In Files (iPad) or File Explorer / Finder, make a folder called “School”.', 'Inside it, make 3 subfolders (like Math, English, Science).', 'Rename one file and move 3 files into the right folders.', 'Show a parent where everything ended up.'],
+    ask: 'What folders did you make, and which files did you move?' },
+  { id: 'b3', track: 'basics', title: 'Shortcut ninja', pay: 1, mins: 15,
+    steps: ['Learn these: copy, paste, undo, select all, find on page, screenshot, switch apps.', 'Mac/iPad keyboard uses ⌘ (Command). Windows uses Ctrl.', 'Show a parent all 7 without looking them up.'],
+    ask: 'Which shortcut was new to you, and what will you use it for?' },
+  { id: 'b4', track: 'basics', title: 'Typing practice', pay: 0.5, mins: 15, repeat: true,
+    steps: ['Practice typing 15 minutes, 3 different days this week (typing.com or keybr.com are free).', 'Fingers on the home row: A S D F and J K L ;', 'Write down your words-per-minute each time.'],
+    ask: 'What were your 3 words-per-minute scores this week?' },
+  { id: 'b5', track: 'basics', title: 'Write a real email', pay: 1, mins: 20,
+    steps: ['Email a relative from your account (with permission).', 'Include a clear subject line, a greeting, at least 3 sentences, and a sign-off.', 'CC a parent so they see it.'],
+    ask: 'Who did you email and what was your subject line?' },
+  { id: 'b6', track: 'basics', title: 'Search like a pro', pay: 1.5, mins: 25,
+    steps: ['Try 3 search tricks: “quotes” for an exact phrase, a minus sign to remove a word (jaguar -car), and site: to search one website (site:nasa.gov moon).', 'Find 3 facts about a topic you like, and write down where each came from.', 'Decide which source is most trustworthy, and why.'],
+    ask: 'Your 3 facts, their sources, and which source you trust most and why.' },
+  // Stay safe online
+  { id: 's1', track: 'safe', title: 'Password power', pay: 1, mins: 15,
+    steps: ['Learn why long passphrases (4 random words) beat short tricky passwords.', 'Learn why you never reuse the same password on different apps.', 'With a parent, check that your main account has a passcode and 2-step verification on.', 'Never type a real password into this app!'],
+    ask: 'Make up an EXAMPLE passphrase (not a real one) and explain why it is strong.' },
+  { id: 's2', track: 'safe', title: 'Spot the scam', pay: 1, mins: 20,
+    steps: ['Ask a parent to show you a few real scam texts or emails (or search “phishing examples for kids”).', 'Look for red flags: hurry-up language, strange links, asking for a code or password, prizes that are too good to be true, misspelled company names.', 'Learn the rule: never send a code or password to anyone, even if they say they are from the company.'],
+    ask: 'List 3 red flags you found and what you would do if you got that message.' },
+  { id: 's3', track: 'safe', title: 'Privacy check-up', pay: 1, mins: 20,
+    steps: ['Pick one app or game you use.', 'With a parent, check: who can message you, who can see your profile, and whether location sharing is off.', 'Change anything that is too open.'],
+    ask: 'Which app did you check, and what did you change?' },
+  { id: 's4', track: 'safe', title: 'Never post this', pay: 0.5, mins: 10,
+    steps: ['Learn what stays private: full name with school, home address, phone number, your live location, passwords, photos showing your school logo or house number.', 'Think about what a stranger could figure out from one photo.'],
+    ask: 'Name 5 things you will never post, and why.' },
+  { id: 's5', track: 'safe', title: 'Your digital footprint', pay: 1, mins: 20,
+    steps: ['With a parent, search your own name online.', 'Talk about what a stranger, a school or a future boss could learn about you.', 'Remember: things posted online can stay forever, even “disappearing” messages can be screenshotted.'],
+    ask: 'What did you find, and what is one thing you will do differently?' },
+  { id: 's6', track: 'safe', title: 'When something feels off', pay: 1, mins: 15,
+    steps: ['Make a plan for when someone online is mean, creepy or asks for secrets: stop replying, screenshot, block, report, tell a parent.', 'Find the block and report buttons in one app you use.', 'Remember: you will never be in trouble for telling a parent.'],
+    ask: 'Write your plan in your own words, and where the report button is in your app.' },
+  // AI smarts
+  { id: 'a1', track: 'ai', title: 'What is AI, really?', pay: 1, mins: 15,
+    steps: ['Learn the big idea: chatbots predict the most likely next words based on huge amounts of text. They do not “know” things like people do.', 'That is why AI can sound very sure and still be wrong.', 'Explain it to a parent in your own words.'],
+    ask: 'Explain how an AI chatbot works in 2–3 sentences, in your own words.' },
+  { id: 'a2', track: 'ai', title: 'Your AI, set up right', pay: 1, mins: 20,
+    steps: ['Open your AI app with a parent and look through its settings: chat history, what it remembers, and how to delete a chat.', 'Agree on family AI rules together. For example: no personal info, AI helps me learn but does not do my homework, tell a parent about anything weird.', 'Write the rules down somewhere you will see them.'],
+    ask: 'What are your family’s AI rules?' },
+  { id: 'a3', track: 'ai', title: 'Prompt like a pro', pay: 1.5, mins: 20,
+    steps: ['Ask your AI something vague, like “tell me about dogs”.', 'Now ask a great prompt: say who you are, what you want, details, and the format. e.g. “I’m 11 and want a small dog for a Florida apartment. Compare 3 breeds in a short table.”', 'Compare the two answers.'],
+    ask: 'Paste your best prompt, and explain what made the answer better.' },
+  { id: 'a4', track: 'ai', title: 'Catch the AI mistake', pay: 1.5, mins: 25,
+    steps: ['Ask your AI 5 questions about something you know really well: your favorite book, a game, your city, or tricky math.', 'Check each answer against a real source or what you know.', 'Find at least one mistake or made-up detail (this is called a “hallucination”).'],
+    ask: 'What did the AI get wrong, and how did you find out?' },
+  { id: 'a5', track: 'ai', title: 'AI tutor, not a cheat code', pay: 1.5, mins: 25,
+    steps: ['Pick a school topic that is hard for you.', 'Ask your AI: “Quiz me on this one question at a time. Give hints, not answers.”', 'Do at least 5 questions, then show a parent what you learned.'],
+    ask: 'What topic did you practice, and what do you understand now that you didn’t before?' },
+  { id: 'a6', track: 'ai', title: 'Real or AI?', pay: 1, mins: 20,
+    steps: ['With a parent, look at some real photos and AI-made ones (try whichfaceisreal.com).', 'Look for clues: odd hands or text, too-smooth skin, backgrounds that don’t make sense, no clear source.', 'Learn the rule: check where something came from before you believe it or share it.'],
+    ask: 'How did you do, and what clues helped you tell?' },
+  { id: 'a7', track: 'ai', title: 'AI and fairness', pay: 1, mins: 20,
+    steps: ['Ask your AI to describe “a scientist”, “a nurse”, and “a CEO”, or to make pictures of them.', 'Notice patterns: who does it imagine? Who gets left out?', 'Talk with a parent about why AI can repeat stereotypes from what it learned.'],
+    ask: 'What patterns did you notice, and why do you think that happens?' },
+  // Make something
+  { id: 'm1', track: 'make', title: 'Make a slideshow', pay: 2, mins: 45,
+    steps: ['Make 5 slides about something you love in Keynote, Google Slides or PowerPoint.', 'Use big titles, a few words per slide, and pictures.', 'Present it to the family.'],
+    ask: 'What was your slideshow about, and what was the hardest part?' },
+  { id: 'm2', track: 'make', title: 'Spreadsheet budget', pay: 2, mins: 40,
+    steps: ['In Numbers, Google Sheets or Excel, plan how you would spend $50 on gifts.', 'Make columns: Person, Gift, Price.', 'Use a SUM formula to add up the total, and adjust until it is under $50.'],
+    ask: 'What formula did you use, and what was your final total?' },
+  { id: 'm3', track: 'make', title: 'Code a game', pay: 2, mins: 60,
+    steps: ['Do one Hour of Code activity on code.org, or make a small game in Scratch (scratch.mit.edu).', 'Change something in the code to make it your own.', 'Show the family how it works.'],
+    ask: 'What did you build, and what did you change in the code?' },
+  { id: 'm4', track: 'make', title: 'Make a how-to video', pay: 2, mins: 45,
+    steps: ['Film a 60-second video teaching how to do something (a recipe, a craft, a trick).', 'Edit it in iMovie or CapCut: trim it, add a title and captions.', 'Show a parent. Only share it where a parent says it’s OK.'],
+    ask: 'What did your video teach, and which editing tool did you learn?' },
+  { id: 'm5', track: 'make', title: 'Build it with AI help', pay: 2, mins: 45,
+    steps: ['Pick a small project (a party plan, a comic, a story, a poster).', 'Use your AI to brainstorm ideas, then make it yourself.', 'Keep track of which ideas came from you and which came from the AI.'],
+    ask: 'What did you make, and which parts were your ideas vs. the AI’s?' },
+  { id: 'm6', track: 'make', title: 'Make a mini website', pay: 2, mins: 60,
+    steps: ['With a parent, make a one-page site about a hobby using Google Sites.', 'Add a title, a photo, a few paragraphs and one link.', 'Keep it private or share only with family.'],
+    ask: 'What is your site about, and what would you add next?' }
+];
+const questById = id => QUESTS.find(q => q.id === id);
+
+
 function weekLabel() {
   const d = new Date(), mon = new Date(d);
   mon.setDate(d.getDate() - ((d.getDay() + 6) % 7));
@@ -73,7 +198,9 @@ function defaultState() {
     teamGoal: { name: 'Family pizza night', emoji: '🍕', target: 400 },
     teamPoints: 0,
     penalties: [],
-    alertHours: [17, 20]
+    alertHours: [17, 20],
+    breakMode: false,
+    journal: [], questLog: [], seeded: []
   };
 }
 
@@ -92,7 +219,7 @@ function normalize(s) {
     SUBJECTS.forEach(sub => { if (!k.subjects[sub]) k.subjects[sub] = { current: 'B', baseline: 'B' }; });
     if (!Array.isArray(k.activeDays)) k.activeDays = [];
   });
-  ['chores', 'logs', 'bank', 'activities', 'pendingRewards', 'pointSubmissions', 'penalties'].forEach(k => { if (!Array.isArray(s[k])) s[k] = d[k]; });
+  ['chores', 'logs', 'bank', 'activities', 'pendingRewards', 'pointSubmissions', 'penalties', 'journal', 'questLog', 'seeded'].forEach(k => { if (!Array.isArray(s[k])) s[k] = d[k]; });
   if (!Array.isArray(s.rewards) || s.rewards.length < 2) s.rewards = [defaultRewards(), defaultRewards()];
   s.rewards = s.rewards.map(list => Array.isArray(list) ? list : []);
   s.rewards.forEach(list => list.forEach(r => { if (!r.id) r.id = uid(); }));
@@ -113,8 +240,17 @@ function normalize(s) {
     if (!Array.isArray(b.auto)) b.auto = [];
     if (b.pays === 'points' && !b.points) b.points = 10;
     if (!b.weight) b.weight = 1;
+    if (!Array.isArray(b.autoBreak)) b.autoBreak = [];
+    if (b.reflect && !REFLECT[b.reflect]) b.reflect = '';
     delete b.kid;
   });
+  // One-time: add the break-week chore set and pin it (and kept school chores) for break weeks.
+  if (!s.seeded.includes('break-v1')) {
+    const has = n => s.bank.find(b => b.name.toLowerCase() === n.toLowerCase());
+    s.bank.forEach(b => { if (BREAK_KEEP.includes(b.name.toLowerCase()) && !b.autoBreak.length) b.autoBreak = /read/i.test(b.name) ? [...b.auto] : [0, 1]; });
+    BREAK_SET.forEach(x => { if (!has(x.name)) s.bank.push({ ...x, pays: 'allowance', extra: false, bonusDollars: 0, points: 0, recurring: false, auto: [], autoBreak: [0, 1], reflect: x.reflect || '' }); });
+    s.seeded.push('break-v1');
+  }
   s.chores.forEach(c => { if (c.rare && !c.points) c.points = 10; });
   if (typeof s.teamGoal !== 'object') s.teamGoal = d.teamGoal;
   if (typeof s.teamPoints !== 'number') s.teamPoints = 0;
@@ -122,6 +258,7 @@ function normalize(s) {
   if (typeof s.maxPay !== 'number') s.maxPay = 30;
   if (!s.screenTimeBase) s.screenTimeBase = 360;
   if (!Array.isArray(s.alertHours)) s.alertHours = [17, 20];
+  s.breakMode = !!s.breakMode;
   return s;
 }
 
@@ -243,12 +380,19 @@ function payoutParts(i) {
   const gradeBefore = gradeImprovementBonus(S.kids[i]);
   const choreEarned = wiped ? 0 : choreBefore;
   const grade = wiped ? 0 : gradeBefore;
-  const extra = Math.min(5, S.chores.filter(c => c.kid === i && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0));
+  const extraChores = S.chores.filter(c => c.kid === i && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0);
+  const questMoney = questEarnedThisWeek(i);
+  const extra = Math.min(EXTRA_CAP, extraChores + questMoney);
   const pay = Math.max(0, Math.min(S.maxPay, choreEarned + extra + grade));
   const approved = S.chores.filter(c => c.kid === i && isRegular(c) && c.status === 'approved').length;
-  return { total, val, weighted, rejected, choreEarned, extra, grade, pay, approved, wiped, penalties, lost: wiped ? choreBefore + gradeBefore : 0, choreBefore };
+  return { total, val, weighted, rejected, choreEarned, extra, extraChores, questMoney, grade, pay, approved, wiped, penalties, lost: wiped ? choreBefore + gradeBefore : 0, choreBefore };
 }
 const kidPayout = i => payoutParts(i).pay;
+const EXTRA_CAP = 5;
+const questEarnedThisWeek = i => (S.questLog || []).filter(e => e.kid === i && e.status === 'approved' && e.week === S.week).reduce((s, e) => s + (e.pay || 0), 0);
+// Pins: 📌 school weeks use b.auto, 🎄 break weeks use b.autoBreak.
+const pinField = () => S.breakMode ? 'autoBreak' : 'auto';
+const pinsFor = b => (S.breakMode ? b.autoBreak : b.auto) || [];
 
 // ── CHORE HELPERS ────────────────────────────────────────────
 const kidChores = i => S.chores.filter(c => c.kid === i || c.kid === 'shared');
@@ -285,6 +429,7 @@ function expandChore(def) {
       day: def.freq === 'daily' ? i : undefined,
       extra: def.pays ? def.pays === 'extra' : !!def.extra, rare: def.pays === 'points' || !!def.rare, points: def.pays === 'points' || def.rare ? (def.points || 10) : 0,
       bonusDollars: def.bonusDollars || 0, weight: Math.max(1, Math.min(3, Number(def.weight) || 1)), dod: def.dod || '', recurring: !!def.recurring,
+      reflect: REFLECT[def.reflect] ? def.reflect : '',
       status: 'none', createdAt: now(), submittedAt: null
     });
   }
@@ -312,6 +457,9 @@ function approveChore(c, auto) {
   if (who !== null) S.kids[who].xp = (S.kids[who].xp || 0) + 1;
   if (c.rare && who !== null) { const k = S.kids[who]; k.points = (k.points || 0) + c.points; k.weekPoints = (k.weekPoints || 0) + c.points; }
   S.teamPoints = (S.teamPoints || 0) + TEAM_PTS_PER_CHORE + (c.rare ? c.points : 0);
+  if (c.reflect && c.answers && who !== null) {
+    S.journal = [{ id: uid(), choreId: c.id, kid: who, kind: c.reflect, chore: c.baseName, answers: c.answers, at: now() }, ...(S.journal || []).filter(j => j.choreId !== c.id)].slice(0, 120);
+  }
   log((auto ? 'Auto-approved' : 'Approved') + ' "' + c.name + '"');
 }
 function markActive(i) {
@@ -338,7 +486,8 @@ function screen(i) {
 const pendingCounts = () => ({
   chores: S.chores.filter(c => c.status === 'pending').length,
   acts: S.pointSubmissions.filter(p => p.status === 'pending').length,
-  rewards: S.pendingRewards.filter(r => r.status === 'pending').length
+  rewards: S.pendingRewards.filter(r => r.status === 'pending').length,
+  quests: (S.questLog || []).filter(e => e.status === 'pending').length
 });
 
 // ════════════════════════════════════════════════════════════
@@ -370,10 +519,10 @@ function header() {
 
 function tabbar() {
   const p = inParent(), cur = ui.tabs[tabKey()];
-  const pc = pendingCounts(), inbox = pc.chores + pc.acts + pc.rewards;
+  const pc = pendingCounts(), inbox = pc.chores + pc.acts + pc.rewards + pc.quests;
   const tabs = p
     ? [['inbox', '📥', 'Approvals', inbox], ['chores', '📋', 'Chores'], ['family', '👨‍👩‍👧', 'Family'], ['settings', '⚙️', 'Settings']]
-    : [['today', '🏠', 'Today'], ['chores', '✅', 'My chores'], ['rewards', '🎁', 'Rewards'], ['team', '💜', 'Team goals']];
+    : [['today', '🏠', 'Today'], ['chores', '✅', 'Chores'], ['learn', '🧠', 'Learn'], ['rewards', '🎁', 'Rewards'], ['team', '💜', 'Team']];
   return `<nav class="tabbar"><div class="tabbar-inner">${tabs.map(([id, ic, lbl, n]) =>
     `<button class="tab ${cur === id ? 'active' : ''}" data-act="tab" data-tab="${id}"><span class="ti">${ic}</span>${lbl}${n ? `<span class="count">${n}</span>` : ''}</button>`).join('')}</div></nav>`;
 }
@@ -397,6 +546,7 @@ function choreRow(c, mode) {
   if (c.extra) meta.push('<span class="tag extra">⭐ extra</span>');
   if (c.rare) meta.push('<span class="tag extra">🌟 bonus points</span>');
   if (c.recurring) meta.push('<span>🔁</span>');
+  if (c.reflect && REFLECT[c.reflect] && (mode === 'kid' || !c.answers)) meta.push('<span class="tag reflect">📝 3 questions</span>');
   if (c.status === 'pending') meta.push(`<span class="tag waiting">⏳ waiting for OK · ${hrsAgo(c.submittedAt)}</span>`);
   else if (c.status === 'approved') meta.push('<span class="tag ok">✓ approved</span>');
   else if (c.status === 'rejected') meta.push(c.missed ? '<span class="tag no">✗ missed</span>' : '<span class="tag no">↺ try again</span>');
@@ -404,7 +554,8 @@ function choreRow(c, mode) {
   const kidCls = isKid(c.kid) ? KID_CLS[c.kid] : '';
   const icon = `<div class="ico ${icoBg[hashIdx(c.baseName, icoBg.length)]}">${choreIcon(c.baseName)}</div>`;
   const note = c.status === 'rejected' && c.note ? `<div class="rej-note">💬 ${esc(c.note)}</div>` : '';
-  const body = `<div class="ci"><div class="cn">${esc(display)}</div><div class="cm">${meta.join('')}</div>${note}</div>`;
+  const refl = mode === 'parent' && c.answers ? reflectionBlock(c.reflect, c.answers) : '';
+  const body = `<div class="ci"><div class="cn">${esc(display)}</div><div class="cm">${meta.join('')}</div>${note}${refl}</div>`;
   if (mode === 'kid') {
     const glyph = c.missed && c.status === 'rejected' ? '✗' : { none: '', pending: '⏳', approved: '✓', rejected: '↺' }[c.status] || '';
     return `<div class="chore status-${c.status}">${icon}${body}<span class="pill ${c.status === 'approved' ? 'green' : c.status === 'rejected' ? 'lost' : ''}">${c.status === 'rejected' ? '<s>' + val + '</s>' : val}</span>
@@ -417,6 +568,11 @@ function choreRow(c, mode) {
   return `<div class="chore prow ${kidCls} status-${c.status}">${icon}${body}<div class="actions">${acts}
     <button class="ibtn" data-act="edit" data-id="${c.id}" aria-label="Edit">✏️</button>
     <button class="ibtn ghost" data-act="del" data-id="${c.id}" aria-label="Delete">🗑</button></div></div>`;
+}
+
+function reflectionBlock(kind, answers) {
+  const R = REFLECT[kind]; if (!R || !answers) return '';
+  return `<div class="reflection">${R.qs.filter(([k]) => answers[k]).map(([k, q]) => `<div class="rq">${esc(q)}</div><div class="ra">${esc(answers[k])}</div>`).join('')}</div>`;
 }
 
 function penaltyNotice(i, parent) {
@@ -443,7 +599,7 @@ function allowanceCard(i, compact) {
     <div class="lines">
       <div class="line"><span>Chores (${p.approved}/${p.total} approved · ${!p.total ? '—' : p.weighted ? money(p.val) + ' per 1×' : money(p.val) + ' each'})</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
       ${p.rejected ? `<div class="line"><span>Try-again chores (${p.rejected})</span><span class="minus">−${money(S.base - p.choreBefore)}</span></div>` : ''}
-      <div class="line"><span>Extra credit</span><span class="plus">+${money(p.extra)}</span></div>
+      <div class="line"><span>Extra credit${p.questMoney ? ' & quests' : ''}${p.extraChores + p.questMoney > EXTRA_CAP ? ' (max $' + EXTRA_CAP + ')' : ''}</span><span class="plus">+${money(p.extra)}</span></div>
       <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
       <div class="line total"><span>This week</span><span>${money(p.pay)}</span></div>
     </div></div>`;
@@ -502,6 +658,7 @@ function kidView(i) {
   if (t === 'chores') return kidChoresView(i);
   if (t === 'rewards') return kidRewardsView(i);
   if (t === 'team') return kidTeamView(i);
+  if (t === 'learn') return kidLearnView(i);
   return kidTodayView(i);
 }
 
@@ -522,7 +679,7 @@ function kidTodayView(i) {
   const lvl = LEVELS[Math.min(Math.floor((S.kids[i].xp || 0) / 25), LEVELS.length - 1)];
 
   const left = `<div class="col">
-    <div class="hero"><div class="hero-main"><span class="hero-tag">✦ Your daily glow-up</span>
+    <div class="hero"><div class="hero-main"><span class="hero-tag">${S.breakMode ? '🎄 Break week' : '✦ Your daily glow-up'}</span>
       <div class="hero-title">Hey, ${esc(S.names[i])}! ✌️</div><div class="hero-text">${msg}</div></div>
       ${ring(pct, list.length ? `${done} of ${list.length} done` : 'free day')}</div>
     <div class="grid3">
@@ -620,6 +777,61 @@ function kidTeamView(i) {
   </div></div>`;
 }
 
+
+// ── SKILL QUESTS (kid Learn tab) ─────────────────────────────
+function questEntries(i, qid) { return (S.questLog || []).filter(e => e.kid === i && e.qid === qid); }
+function questState(i, q) {
+  // done | pending | retry | open | locked  (repeatable quests: done = approved this week)
+  const es = questEntries(i, q.id);
+  if (es.some(e => e.status === 'pending')) return 'pending';
+  if (q.repeat ? es.some(e => e.status === 'approved' && e.week === S.week) : es.some(e => e.status === 'approved')) return 'done';
+  const last = es[es.length - 1];
+  if (last && last.status === 'rejected') return 'retry';
+  if (q.repeat) return 'open';
+  const track = QUESTS.filter(x => x.track === q.track && !x.repeat);
+  const idx = track.indexOf(q);
+  const prevOk = idx <= 0 || ['done', 'pending'].includes(questState(i, track[idx - 1]));
+  return prevOk ? 'open' : 'locked';
+}
+const questDoneCount = i => QUESTS.filter(q => !q.repeat && questEntries(i, q.id).some(e => e.status === 'approved')).length;
+const trackDone = (i, t) => QUESTS.filter(q => q.track === t.id && !q.repeat).every(q => questEntries(i, q.id).some(e => e.status === 'approved'));
+
+function kidLearnView(i) {
+  const p = payoutParts(i), oneTime = QUESTS.filter(q => !q.repeat).length, done = questDoneCount(i);
+  const capLeft = Math.max(0, EXTRA_CAP - p.extraChores - p.questMoney);
+  const badges = QUEST_TRACKS.filter(t => trackDone(i, t));
+  const glyph = { done: '✓', pending: '⏳', retry: '↺', open: '▶', locked: '🔒' };
+  const tracks = QUEST_TRACKS.map(t => {
+    const qs = QUESTS.filter(q => q.track === t.id);
+    const n = qs.filter(q => !q.repeat).length, d = qs.filter(q => !q.repeat && questEntries(i, q.id).some(e => e.status === 'approved')).length;
+    return `<div class="card quest-track"><div class="card-head"><div><div class="card-title">${t.icon} ${esc(t.name)}</div><div class="card-sub">${d} of ${n} done${d === n ? ' · 🏅 ' + esc(t.badge) + ' badge!' : ''}</div></div></div>
+      <div class="bar thin"><div class="bar-fill" style="width:${n ? d / n * 100 : 0}%"></div></div>
+      <div class="list mt12">${qs.map(q => {
+        const st = questState(i, q);
+        return `<button class="quest q-${st}" data-act="quest-open" data-q="${q.id}" ${st === 'locked' ? 'aria-disabled="true"' : ''}>
+          <span class="q-glyph">${glyph[st]}</span><span class="q-body"><span class="q-title">${esc(q.title)}</span>
+          <span class="q-meta">${q.repeat ? '🔁 every week · ' : ''}~${q.mins} min${st === 'pending' ? ' · waiting for a parent' : st === 'retry' ? ' · try again' : st === 'locked' ? ' · finish the one above first' : ''}</span></span>
+          <span class="pill ${st === 'done' ? 'green' : ''}">+${money(q.pay)}</span></button>`;
+      }).join('')}</div></div>`;
+  }).join('');
+  const wins = (S.journal || []).filter(j => j.kid === i).slice(0, 5);
+  return `<div class="split"><div class="col">
+    <div class="hero learn-hero"><div class="hero-main"><span class="hero-tag">🧠 Skill Quests</span>
+      <div class="hero-title">Level up your tech skills</div>
+      <div class="hero-text">Real computer and AI skills you'll use for life. Every quest pays cash once a parent checks it.</div></div>
+      ${ring(Math.round(done / oneTime * 100), done + ' of ' + oneTime + ' quests')}</div>
+    <div class="card"><div class="card-title">⭐ Extra credit this week</div>
+      <div class="card-sub">Quests and ⭐ extra chores share up to ${money(EXTRA_CAP)} a week.</div>
+      <div class="bar"><div class="bar-fill" style="width:${Math.min(100, (p.extraChores + p.questMoney) / EXTRA_CAP * 100)}%"></div></div>
+      <div class="bar-labels"><span>${money(p.extra)} earned</span><span>${capLeft ? money(capLeft) + ' left' : 'Maxed out! Quests still earn badges 🏅'}</span></div></div>
+    ${badges.length ? `<div class="card"><div class="card-title">🏅 Badges</div><div class="badges mt12">${badges.map(t => `<span class="badge-chip">${t.icon} ${esc(t.badge)}</span>`).join('')}</div></div>` : ''}
+    ${wins.length ? `<div class="card"><div class="card-title">📓 My wins</div><div class="card-sub">Your decisions and brave moments.</div><div class="list mt12">${wins.map(j => `<div class="win"><b>${esc(REFLECT[j.kind] ? REFLECT[j.kind].title : j.chore)}</b><span>${esc(Object.values(j.answers || {})[0] || '')}</span><span class="small muted">${new Date(j.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></div>`).join('')}</div></div>` : ''}
+  </div><div class="col">
+    <div><div class="section-title">Quests</div><div class="section-sub">Tap one to see the steps. Finish a quest to unlock the next.</div></div>
+    ${tracks}
+  </div></div>`;
+}
+
 // ════════════════════════════════════════════════════════════
 //  PARENT VIEWS
 // ════════════════════════════════════════════════════════════
@@ -635,12 +847,20 @@ function parentInboxView() {
   const chores = S.chores.filter(c => c.status === 'pending').sort((a, b) => a.submittedAt - b.submittedAt);
   const acts = S.pointSubmissions.filter(p => p.status === 'pending');
   const reqs = S.pendingRewards.filter(r => r.status === 'pending');
-  const none = !chores.length && !acts.length && !reqs.length;
+  const quests = (S.questLog || []).filter(e => e.status === 'pending');
+  const none = !chores.length && !acts.length && !reqs.length && !quests.length;
   return `<div class="split"><div class="col">
     <div><div class="section-title">Approvals</div><div class="section-sub">${none ? 'Nothing waiting on you.' : 'Check the work, then tap ✓ or ✗.'}</div></div>
     ${none ? '<div class="card empty"><span class="big">✨</span>All caught up!</div>' : ''}
     ${chores.length ? `<div class="list"><div class="card-head" style="margin:0"><div class="card-title">Chores <span class="muted small">(${chores.length})</span></div>
       ${chores.length > 1 ? `<button class="btn sm green" data-act="approve-all">✓ Approve all</button>` : ''}</div>${chores.map(c => choreRow(c, 'parent')).join('')}</div>` : ''}
+    ${quests.length ? `<div class="list"><div class="card-title">🧠 Skill quests <span class="muted small">(${quests.length})</span></div>${quests.map(e => {
+      const q = questById(e.qid) || { title: e.qid, ask: '' };
+      return `<div class="chore prow ${KID_CLS[e.kid]}"><div class="ico bg-blue">${(QUEST_TRACKS.find(t => t.id === q.track) || {}).icon || '🧠'}</div>
+      <div class="ci"><div class="cn">${esc(q.title)}</div><div class="cm"><span class="tag kid${e.kid}">${esc(S.names[e.kid])}</span><span>+${money(e.pay)} · ${hrsAgo(e.at)}</span></div>
+        <div class="reflection"><div class="rq">${esc(q.ask)}</div><div class="ra">${esc(e.answer || '—')}</div></div></div>
+      <div class="actions"><button class="ibtn ok" data-act="quest-ok" data-id="${e.id}" aria-label="Approve">✓</button><button class="ibtn no" data-act="quest-no" data-id="${e.id}" aria-label="Send back">✗</button></div></div>`;
+    }).join('')}</div>` : ''}
     ${acts.length ? `<div class="list"><div class="card-title">Bonus activities <span class="muted small">(${acts.length})</span></div>${acts.map(p => `
       <div class="chore prow ${KID_CLS[p.kidIdx]}"><div class="ico bg-gold">${choreIcon(p.activityName)}</div>
       <div class="ci"><div class="cn">${esc(p.activityName)}</div><div class="cm"><span class="tag kid${p.kidIdx}">${esc(S.names[p.kidIdx])}</span><span>+${p.points} pts · ${hrsAgo(p.submittedAt)}</span></div></div>
@@ -664,11 +884,11 @@ function kidSummaryCard(i, small) {
       <div class="money-big" style="font-size:1.8rem">${money(p.pay)}</div></div>
     <div class="bar"><div class="bar-fill ${p.pay < S.base ? 'warn' : ''}" style="width:${pct}%;background:${p.pay < S.base ? '' : `var(--k${i})`}"></div><div class="bar-tick" style="left:${tick}%"></div></div>
     <div class="bar-labels"><span>$0</span><span>${money(S.base)}</span><span>${money(S.maxPay)}</span></div>
-    <div class="mini-stats"><div class="mini"><b>${p.approved}/${p.total}</b><span>chores</span></div><div class="mini"><b>${S.kids[i].points}</b><span>points</span></div><div class="mini"><b>${mins(s.left)}</b><span>screen left</span></div></div>
+    <div class="mini-stats"><div class="mini"><b>${p.approved}/${p.total}</b><span>chores</span></div><div class="mini"><b>${S.kids[i].points}</b><span>points</span></div><div class="mini"><b>${questDoneCount(i)}</b><span>quests</span></div><div class="mini"><b>${mins(s.left)}</b><span>screen left</span></div></div>
     ${penaltyNotice(i, true)}
     ${small ? '' : `<div class="lines">
       <div class="line"><span>Chores (${!p.total ? '—' : p.weighted ? money(p.val) + ' per 1×' : money(p.val) + ' each'})</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
-      <div class="line"><span>Extra credit</span><span class="plus">+${money(p.extra)}</span></div>
+      <div class="line"><span>Extra credit${p.questMoney ? ' (incl. ' + money(p.questMoney) + ' quests)' : ''}</span><span class="plus">+${money(p.extra)}</span></div>
       <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
       <div class="line total"><span>Pay this week</span><span>${money(p.pay)}</span></div></div>
     <div class="adjust"><span class="lbl">⭐ Points</span><button class="ibtn" data-act="pts" data-k="${i}" data-n="-10">−10</button><button class="ibtn" data-act="pts" data-k="${i}" data-n="-5">−5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="5">+5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="10">+10</button></div>
@@ -723,12 +943,13 @@ function paysLabel(b) {
 }
 const worthOpts = cur => [[1, '1× normal'], [2, '2× double'], [3, '3× triple']].map(([v, l]) => `<option value="${v}" ${Number(cur) === v ? 'selected' : ''}>${l}</option>`).join('');
 function bankCard(kidOpts) {
-  const baked = S.bank.filter(b => b.auto.length);
+  const baked = S.bank.filter(b => pinsFor(b).length);
   const row = (b, idx) => `<div class="bank-row">
       <div class="ico ${icoBg[hashIdx(b.name, icoBg.length)]}" style="width:42px;height:42px;font-size:1.3rem">${choreIcon(b.name)}</div>
       <div class="ci"><div class="cn" style="font-size:.98rem">${esc(b.name)}</div>
         <div class="cm"><span>${b.freq === 'daily' ? 'Daily' : b.freq === 'twice-weekly' ? '2×/wk' : 'Weekly'}</span><span class="dot">${paysLabel(b)}</span></div>
-        <div class="bake"><span class="bake-lbl">📌 Every week:</span>${[0, 1].map(k => `<button class="bake-chip k${k} ${b.auto.includes(k) ? 'on' : ''}" data-act="bake" data-i="${idx}" data-k="${k}">${b.auto.includes(k) ? '✓ ' : ''}${esc(S.names[k])}</button>`).join('')}</div></div>
+        ${b.reflect && REFLECT[b.reflect] ? `<div class="cm"><span class="tag reflect">📝 ${esc(REFLECT[b.reflect].title)} questions</span></div>` : ''}
+        ${[['auto', '📌 School weeks'], ['autoBreak', '🎄 Break weeks']].map(([f, lbl]) => `<div class="bake ${S.breakMode === (f === 'autoBreak') ? 'live' : ''}"><span class="bake-lbl">${lbl}:</span>${[0, 1].map(k => `<button class="bake-chip k${k} ${(b[f] || []).includes(k) ? 'on' : ''}" data-act="bake" data-i="${idx}" data-k="${k}" data-f="${f}">${(b[f] || []).includes(k) ? '✓ ' : ''}${esc(S.names[k])}</button>`).join('')}</div>`).join('')}</div>
       <div class="actions"><select id="bankKid_${idx}" style="width:auto;padding:8px" aria-label="Add for">${kidOpts(0)}</select>
         <button class="ibtn ok" data-act="bank-add" data-i="${idx}">+ Add</button>
         <button class="ibtn" data-act="bank-edit" data-i="${idx}" aria-label="Edit">✏️</button>
@@ -736,11 +957,17 @@ function bankCard(kidOpts) {
   const regular = S.bank.map((b, i) => [b, i]).filter(([b]) => b.pays !== 'points');
   const rare = S.bank.map((b, i) => [b, i]).filter(([b]) => b.pays === 'points');
   return `<div class="card"><div class="card-title">🏦 Chore bank</div>
-    <div class="card-sub">📌 = loads automatically every new week for that girl. Anything else, add when you need it.</div>
+    <div class="card-sub">📌 loads on school weeks, 🎄 on break weeks (Settings → Break mode). Right now: <b>${S.breakMode ? '🎄 break weeks' : '📌 school weeks'}</b>.</div>
     <div class="list mt12">${regular.length ? regular.map(([b, i]) => row(b, i)).join('') : '<div class="empty">Chores you add with “Save to bank” show up here.</div>'}</div>
     ${rare.length ? `<div class="card-title mt16">🌟 Rare chores <span class="muted small">(bonus points)</span></div><div class="list mt8">${rare.map(([b, i]) => row(b, i)).join('')}</div>` : ''}
-    ${baked.length ? `<button class="btn block soft mt12" data-act="bake-load">📌 Load every-week chores now</button>` : ''}
+    ${baked.length ? `<button class="btn block soft mt12" data-act="bake-load">${S.breakMode ? '🎄 Load break-week chores now' : '📌 Load school-week chores now'}</button>` : ''}
   </div>`;
+}
+
+function journalCard() {
+  const js = (S.journal || []).slice(0, 8);
+  return `<div class="card"><div class="card-title">📓 Decisions & brave moments</div><div class="card-sub">What the girls wrote on their Decision Cards and confidence chores.</div>
+    <div class="list mt12">${js.length ? js.map(j => `<details class="jentry"><summary><span class="tag kid${j.kid}">${esc(S.names[j.kid])}</span> <b>${esc(REFLECT[j.kind] ? REFLECT[j.kind].title : j.chore)}</b> <span class="small muted">${new Date(j.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span></summary>${reflectionBlock(j.kind, j.answers)}</details>`).join('') : '<div class="empty">Nothing yet. Answers show up here once you approve a Decision Card, One brave thing, Kid in charge or Teach the family.</div>'}</div></div>`;
 }
 
 function parentFamilyView() {
@@ -749,6 +976,7 @@ function parentFamilyView() {
       <div class="btn-row"><button class="btn sm soft" data-act="grades-open">📚 Update grades</button><button class="btn sm danger" data-act="new-week">🔄 New week</button></div></div>
     <div class="split even">${kidSummaryCard(0, false)}${kidSummaryCard(1, false)}</div>
     <div class="split even">${teamCard(true)}
+      ${journalCard()}
       <div class="card"><div class="card-title">📋 Recent activity</div><div class="log mt12">${(S.logs || []).slice(0, 25).map(l => `<div>${esc(l)}</div>`).join('') || '<div>No activity yet.</div>'}</div></div></div>
   </div>`;
 }
@@ -794,10 +1022,23 @@ function alertsCard() {
     <div class="small muted">Times apply to every parent device. Turn alerts on separately on each phone or iPad you want them on.</div></div>`;
 }
 
+function breakCard() {
+  const count = f => [0, 1].map(k => S.bank.filter(b => (b[f] || []).includes(k)).length);
+  const sc = count('auto'), bc = count('autoBreak');
+  return `<div class="card break-card ${S.breakMode ? 'on' : ''}"><div class="card-head"><div><div class="card-title">🎄 Break mode</div>
+      <div class="card-sub">${S.breakMode ? 'On: New Week loads the 🎄 break-week chores.' : 'Off: New Week loads the 📌 school-week chores.'}</div></div>
+      <button class="switch ${S.breakMode ? 'on' : ''}" data-act="break-toggle" role="switch" aria-checked="${S.breakMode}" aria-label="Break mode"><span></span></button></div>
+    <div class="lines"><div class="line"><span>📌 School set</span><span>${esc(S.names[0])} ${sc[0]} · ${esc(S.names[1])} ${sc[1]}</span></div>
+      <div class="line"><span>🎄 Break set</span><span>${esc(S.names[0])} ${bc[0]} · ${esc(S.names[1])} ${bc[1]}</span></div></div>
+    <div class="small muted mt8">Pick which chores belong to each set in Chores → Chore bank.</div>
+    <button class="btn block soft mt12" data-act="break-swap">${S.breakMode ? '🎄 Switch this week to break chores now' : '📌 Switch this week back to school chores now'}</button></div>`;
+}
+
 function parentSettingsView() {
   const g = S.teamGoal;
   if (pushState === 'checking') refreshPushState();
   return `<div class="split even"><div class="col">
+    ${breakCard()}
     ${alertsCard()}
     <div class="card"><div class="card-title">👭 Family & allowance</div><div class="form mt12">
       <div class="form-row"><div class="field"><label>Kid 1 name</label><input id="sName0" type="text" value="${esc(S.names[0])}"></div><div class="field"><label>Emoji</label><input id="sEmo0" type="text" value="${esc(S.emojis[0])}"></div></div>
@@ -929,12 +1170,111 @@ const A = {
     if (c.status === 'approved') { toast('Already approved ✓'); return; }
     if (c.status === 'rejected' && c.missed) { toast('A parent marked this as missed — ask them if you can make it up'); return; }
     if (c.status === 'pending') { c.status = 'none'; c.submittedAt = null; log(S.names[me] + ' un-checked "' + c.name + '"'); commit('Undone — no worries'); return; }
+    if (c.reflect && REFLECT[c.reflect]) { A['reflect-open']({ id }); return; }
     c.status = 'pending'; c.submittedAt = now(); c.by = me; markActive(me);
     log(S.names[me] + ' finished "' + c.name + '"');
     save(); render();
     const left = todayList(me).filter(x => !isDoneish(x)).length;
     if (left === 0 && todayList(me).length) { confetti(); toast("That's everything for today! 🎉"); }
     else toast('Nice! Sent to a parent for a ✓');
+  },
+  'reflect-open'({ id }) {
+    const c = findChore(id); if (!c) return; const R = REFLECT[c.reflect]; editingId = id;
+    const a = c.answers || {};
+    openModal(`<div class="modal-title">${R.title}</div><div class="muted bold">${esc(R.intro)}</div>
+      ${R.qs.map(([k, q, ph], n) => `<div class="field"><label for="rf_${k}">${n + 1}. ${esc(q)}</label><textarea id="rf_${k}" rows="2" maxlength="400" placeholder="${esc(ph)}">${esc(a[k] || '')}</textarea></div>`).join('')}
+      <div class="modal-btns"><button class="btn white" data-act="modal-close">Not yet</button><button class="btn" data-act="reflect-send">Send to a parent</button></div>`);
+    setTimeout(() => { const f = el('rf_' + R.qs[0][0]); if (f) f.focus(); }, 50);
+  },
+  'reflect-send'() {
+    const c = findChore(editingId); if (!c) return closeModal();
+    const R = REFLECT[c.reflect], ans = {};
+    R.qs.forEach(([k]) => { ans[k] = (el('rf_' + k).value || '').trim(); });
+    const blank = R.qs.filter(([k]) => ans[k].length < 2).length;
+    if (blank) { toast('Answer all ' + R.qs.length + ' questions first'); return; }
+    const me = isKid(ui.who) ? ui.who : (isKid(c.kid) ? c.kid : 0);
+    c.answers = ans; c.status = 'pending'; c.submittedAt = now(); c.by = me; c.missed = false; markActive(me);
+    log(S.names[me] + ' finished "' + c.name + '" (answered the questions)');
+    closeModal(); save(); render(); confetti(); toast('Great thinking! Sent to a parent 💜');
+  },
+
+  'quest-open'({ q }) {
+    const quest = questById(q); if (!quest) return;
+    const i = isKid(ui.who) ? ui.who : 0, st = questState(i, quest);
+    if (st === 'locked') { toast('Finish the quest above this one first 🔒'); return; }
+    const es = questEntries(i, quest.id), last = es[es.length - 1];
+    const track = QUEST_TRACKS.find(t => t.id === quest.track);
+    editingId = quest.id;
+    const body = st === 'pending'
+      ? `<div class="banner" style="background:var(--amber-soft);color:var(--amber)">⏳ Sent! Waiting for a parent to check it.</div><div class="reflection"><div class="rq">${esc(quest.ask)}</div><div class="ra">${esc(last.answer)}</div></div>
+         <div class="modal-btns"><button class="btn white" data-act="quest-cancel" data-id="${last.id}">Take it back</button><button class="btn" data-act="modal-close">OK</button></div>`
+      : st === 'done'
+      ? `<div class="banner" style="background:var(--green-soft);color:var(--green)">✓ Done${quest.repeat ? ' for this week. Come back next week!' : '! Nice work.'}</div>${last && last.answer ? `<div class="reflection"><div class="rq">${esc(quest.ask)}</div><div class="ra">${esc(last.answer)}</div></div>` : ''}
+         <div class="modal-btns"><button class="btn" data-act="modal-close">Close</button></div>`
+      : `${st === 'retry' && last.note ? `<div class="rej-note">💬 ${esc(last.note)}</div>` : ''}
+         <ol class="steps">${quest.steps.map(x => `<li>${esc(x)}</li>`).join('')}</ol>
+         <div class="field"><label for="qAns">✍️ ${esc(quest.ask)}</label><textarea id="qAns" rows="3" maxlength="600" placeholder="Write it in your own words">${st === 'retry' && last ? esc(last.answer) : ''}</textarea></div>
+         <div class="modal-btns"><button class="btn white" data-act="modal-close">Later</button><button class="btn" data-act="quest-send">Send to a parent · +${money(quest.pay)}</button></div>`;
+    openModal(`<div class="modal-title">${track ? track.icon : '🧠'} ${esc(quest.title)}</div>
+      <div class="muted bold">${esc(track ? track.name : '')} · about ${quest.mins} min · +${money(quest.pay)}${quest.repeat ? ' each week' : ''}</div>${body}`);
+  },
+  'quest-send'() {
+    const quest = questById(editingId); if (!quest) return closeModal();
+    const answer = (el('qAns').value || '').trim();
+    if (answer.length < 8) { toast('Write a little more so a parent can see what you learned'); return; }
+    const i = isKid(ui.who) ? ui.who : 0;
+    S.questLog.push({ id: uid(), qid: quest.id, kid: i, status: 'pending', answer, pay: quest.pay, at: now() });
+    markActive(i); log(S.names[i] + ' finished quest "' + quest.title + '"');
+    closeModal(); save(); render(); confetti(); toast('Quest sent to a parent 🧠');
+  },
+  'quest-cancel'({ id }) { S.questLog = S.questLog.filter(e => e.id !== id); closeModal(); commit('Taken back'); },
+  'quest-ok'({ id }) {
+    const e = S.questLog.find(x => x.id === id); if (!e) return;
+    const q = questById(e.qid) || { title: e.qid };
+    const before = payoutParts(e.kid);
+    e.status = 'approved'; e.decidedAt = now(); e.week = S.week; e.note = '';
+    S.kids[e.kid].xp = (S.kids[e.kid].xp || 0) + 1;
+    S.teamPoints = (S.teamPoints || 0) + TEAM_PTS_PER_CHORE;
+    const added = payoutParts(e.kid).extra - before.extra;
+    log('Approved quest "' + q.title + '" for ' + S.names[e.kid]);
+    confetti(); commit(added > 0 ? '+' + money(added) + ' for ' + S.names[e.kid] : 'Approved ✓ ($' + EXTRA_CAP + ' extra-credit cap reached)');
+  },
+  'quest-no'({ id }) {
+    const e = S.questLog.find(x => x.id === id); if (!e) return; editingId = id;
+    const q = questById(e.qid) || { title: e.qid };
+    openModal(`<div class="modal-title">↺ Send back “${esc(q.title)}”</div>
+      <div class="field"><label for="qNote">What should ${esc(S.names[e.kid])} fix? (she'll see this)</label><input id="qNote" type="text" maxlength="140" placeholder="e.g. Show me the folders before you send it"></div>
+      <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn danger" data-act="quest-no-save">Send back</button></div>`);
+  },
+  'quest-no-save'() {
+    const e = S.questLog.find(x => x.id === editingId); if (!e) return closeModal();
+    e.status = 'rejected'; e.decidedAt = now(); e.note = el('qNote').value.trim();
+    log('Sent back quest "' + ((questById(e.qid) || {}).title || e.qid) + '"'); closeModal(); commit('Sent back to try again');
+  },
+
+  'break-toggle'() {
+    S.breakMode = !S.breakMode;
+    log('Break mode ' + (S.breakMode ? 'on' : 'off'));
+    save(); render();
+    toast(S.breakMode ? '🎄 Break mode on: New Week loads break chores' : '📌 Break mode off: New Week loads school chores', 'Switch this week now', () => A['break-swap']());
+  },
+  'break-swap'() {
+    const f = pinField(), label = S.breakMode ? 'break' : 'school';
+    const keep = (c) => isKid(c.kid) && S.bank.some(b => b.name.toLowerCase() === c.baseName.toLowerCase() && (b[f] || []).includes(c.kid));
+    const drop = S.chores.filter(c => c.recurring && c.status === 'none' && !keep(c));
+    const after = S.chores.filter(c => !drop.includes(c));
+    const add = [];
+    S.bank.forEach(b => (b[f] || []).forEach(k => { if (!after.some(c => c.kid === k && c.baseName.toLowerCase() === b.name.toLowerCase())) add.push({ b, k }); }));
+    if (!drop.length && !add.length) { toast('This week already has the ' + label + ' chores'); return; }
+    const names = [...new Set(drop.map(c => c.baseName))];
+    confirmModal('Switch this week to ' + label + ' chores?',
+      (names.length ? 'Removes unchecked: ' + names.join(', ') + '. ' : '') + (add.length ? 'Adds: ' + [...new Set(add.map(x => x.b.name))].join(', ') + '. ' : '') + 'Anything already checked off stays.', 'Switch', () => {
+      undoable('Switched this week to ' + label + ' chores', () => {
+        S.chores = S.chores.filter(c => !drop.includes(c));
+        add.forEach(x => expandChore({ ...x.b, kid: x.k, recurring: true }));
+        log('Switched this week to ' + label + ' chores');
+      });
+    });
   },
   approve({ id }) { const c = findChore(id); if (!c) return; approveChore(c); confetti(); commit('Approved ✓'); },
   reject({ id }) {
@@ -988,6 +1328,7 @@ const A = {
       const who = isKid(c.kid) ? c.kid : (isKid(c.by) ? c.by : null);
       if (c.rare && who !== null) { const k = S.kids[who]; k.points = Math.max(0, (k.points || 0) - c.points); k.weekPoints = Math.max(0, (k.weekPoints || 0) - c.points); }
     }
+    S.journal = (S.journal || []).filter(j => j.choreId !== c.id);
     c.status = 'none'; c.submittedAt = null; c.approvedAt = null; c.missed = false; c.note = ''; commit('Reset to not done');
   },
   del({ id }) {
@@ -1035,8 +1376,8 @@ const A = {
     const bake = el('fBake').checked && isKid(kid);
     if (el('fBank').checked || bake) {
       const existing = S.bank.find(b => b.name.toLowerCase() === name.toLowerCase());
-      if (existing) { if (bake && !existing.auto.includes(kid)) existing.auto.push(kid); }
-      else S.bank.push({ name, freq: def.freq, pays, extra: pays === 'extra', bonusDollars: def.bonusDollars, points: def.points, weight, dod: def.dod, recurring: bake, auto: bake ? [kid] : [] });
+      if (existing) { const f = pinField(); if (bake && !(existing[f] || (existing[f] = [])).includes(kid)) existing[f].push(kid); }
+      else S.bank.push({ name, freq: def.freq, pays, extra: pays === 'extra', bonusDollars: def.bonusDollars, points: def.points, weight, dod: def.dod, recurring: bake, auto: bake && !S.breakMode ? [kid] : [], autoBreak: bake && S.breakMode ? [kid] : [], reflect: '' });
     }
     log('Added "' + name + '" for ' + kidName(kid) + (n > 1 ? ' (' + n + '×)' : ''));
     commit('Added "' + name + '"' + (n > 1 ? ' × ' + n : ''));
@@ -1047,16 +1388,18 @@ const A = {
     const n = expandChore({ ...b, kid });
     log('Added "' + b.name + '" from bank for ' + kidName(kid)); commit('Added "' + b.name + '" for ' + kidName(kid) + (n > 1 ? ' × ' + n : ''));
   },
-  bake({ i, k }) {
-    const b = S.bank[Number(i)]; if (!b) return; k = Number(k);
-    b.auto = b.auto.includes(k) ? b.auto.filter(x => x !== k) : [...b.auto, k].sort();
-    b.recurring = b.auto.length > 0;
-    commit(b.auto.includes(k) ? '📌 ' + b.name + ' every week for ' + S.names[k] : 'Unpinned for ' + S.names[k]);
+  bake({ i, k, f }) {
+    const b = S.bank[Number(i)]; if (!b) return; k = Number(k); f = f === 'autoBreak' ? 'autoBreak' : 'auto';
+    const cur = b[f] || [];
+    b[f] = cur.includes(k) ? cur.filter(x => x !== k) : [...cur, k].sort();
+    b.recurring = (b.auto || []).length > 0 || (b.autoBreak || []).length > 0;
+    const set = f === 'autoBreak' ? '🎄 break weeks' : '📌 school weeks';
+    commit(b[f].includes(k) ? b.name + ' on ' + set + ' for ' + S.names[k] : b.name + ' off ' + set + ' for ' + S.names[k]);
   },
   'bake-load'() {
     const missing = bakedMissing();
-    if (!missing.length) { toast('Every-week chores are already on this week'); return; }
-    confirmModal('Load every-week chores?', 'Adds ' + missing.length + ' pinned chore' + (missing.length > 1 ? 's' : '') + ' that aren\'t on this week yet: ' + missing.map(m => m.b.name + ' (' + S.names[m.k] + ')').join(', ') + '.', 'Load', () => {
+    if (!missing.length) { toast((S.breakMode ? 'Break-week' : 'School-week') + ' chores are already on this week'); return; }
+    confirmModal(S.breakMode ? 'Load break-week chores?' : 'Load school-week chores?', 'Adds ' + missing.length + ' pinned chore' + (missing.length > 1 ? 's' : '') + ' that aren\'t on this week yet: ' + missing.map(m => m.b.name + ' (' + S.names[m.k] + ')').join(', ') + '.', 'Load', () => {
       let n = 0; missing.forEach(m => { n += expandChore({ ...m.b, kid: m.k, recurring: true }); });
       log('Loaded every-week chores'); commit('Added ' + n + ' chores');
     });
@@ -1071,6 +1414,7 @@ const A = {
         <div class="field"><label>Pays</label><select id="bPays">${opt('allowance', 'Share of $' + S.base, b.pays)}${opt('extra', '⭐ Extra money', b.pays)}${opt('points', '🌟 Bonus points', b.pays)}</select></div></div>
       <div class="form-row"><div class="field"><label>Extra $ / bonus points</label><input id="bAmt" type="number" step="0.5" value="${b.pays === 'points' ? b.points : b.bonusDollars || 1}"></div>
         <div class="field"><label>Worth (allowance chores)</label><select id="bWeight">${worthOpts(cw(b))}</select></div></div>
+      <div class="field"><label>Questions she answers when she checks it off</label><select id="bReflect"><option value="">None</option>${REFLECT_KEYS.map(k => `<option value="${k}" ${b.reflect === k ? 'selected' : ''}>${REFLECT[k].title}</option>`).join('')}</select></div>
       <div class="small muted bold">Changes apply next time it's added. Chores already on this week stay as they are.</div>
       <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn" data-act="bank-save">Save</button></div>`);
   },
@@ -1080,7 +1424,7 @@ const A = {
     const pays = el('bPays').value, amt = parseFloat(el('bAmt').value) || 0;
     Object.assign(b, { name, dod: el('bDod').value.trim(), freq: el('bFreq').value, pays, extra: pays === 'extra',
       bonusDollars: pays === 'extra' ? (amt || 1) : 0, points: pays === 'points' ? Math.round(amt || 10) : 0,
-      weight: pays === 'allowance' ? Number(el('bWeight').value) || 1 : 1 });
+      weight: pays === 'allowance' ? Number(el('bWeight').value) || 1 : 1, reflect: el('bReflect').value });
     closeModal(); commit('Saved');
   },
 
@@ -1166,7 +1510,7 @@ const A = {
   },
 
   'new-week'() {
-    requirePin(() => confirmModal('Start a new week?', 'Clears this week\'s chores and any disrespect penalty, resets points, screen time and the team goal, makes current grades the new baseline, and loads the 📌 every-week chores. You\'ll have 30 seconds to undo.', 'Start new week', () => {
+    requirePin(() => confirmModal('Start a new week?', 'Clears this week\'s chores and any disrespect penalty, resets points, screen time and the team goal, makes current grades the new baseline, and loads the ' + (S.breakMode ? '🎄 break-week' : '📌 school-week') + ' chores. You\'ll have 30 seconds to undo.' + (S.breakMode ? ' (Break mode is ON. Turn it off in Settings when school starts.)' : ''), 'Start new week', () => {
       const snap = JSON.stringify(S);
       S.kids.forEach(k => {
         SUBJECTS.forEach(s => { k.subjects[s].baseline = k.subjects[s].current; });
@@ -1178,10 +1522,10 @@ const A = {
       S.pendingRewards = S.pendingRewards.filter(r => r.status === 'pending');
       S.teamPoints = 0;
       S.week = weekLabel();
-      let n = 0; S.bank.forEach(b => b.auto.forEach(k => { n += expandChore({ ...b, kid: k, recurring: true }); }));
-      log('New week started' + (n ? ' — ' + n + ' every-week chores loaded' : ''));
+      let n = 0; S.bank.forEach(b => pinsFor(b).forEach(k => { n += expandChore({ ...b, kid: k, recurring: true }); }));
+      log('New ' + (S.breakMode ? 'break ' : '') + 'week started' + (n ? ' — ' + n + ' chores loaded' : ''));
       save(); render();
-      toast(n ? 'New week — ' + n + ' every-week chores loaded' : 'New week started — add chores from the bank', 'Undo', () => { S = normalize(JSON.parse(snap)); save(); render(); toast('New week undone'); }, 30000);
+      toast(n ? 'New ' + (S.breakMode ? 'break ' : '') + 'week — ' + n + ' chores loaded' : 'New week started — add chores from the bank', 'Undo', () => { S = normalize(JSON.parse(snap)); save(); render(); toast('New week undone'); }, 30000);
     }, true), 'PIN to start a new week');
   },
 
@@ -1306,7 +1650,7 @@ const A = {
 let editingBank = null, penKid = null;
 function bakedMissing() {
   const out = [];
-  S.bank.forEach(b => b.auto.forEach(k => { if (!S.chores.some(c => c.kid === k && c.baseName.toLowerCase() === b.name.toLowerCase())) out.push({ b, k }); }));
+  S.bank.forEach(b => pinsFor(b).forEach(k => { if (!S.chores.some(c => c.kid === k && c.baseName.toLowerCase() === b.name.toLowerCase())) out.push({ b, k }); }));
   return out;
 }
 let editingId = null, parentReturn = isKid(ui.who) ? ui.who : 0;
