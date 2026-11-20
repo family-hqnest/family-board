@@ -477,12 +477,6 @@ function availablePoints(i) {
   const held = S.pendingRewards.filter(r => r.kidIdx === i && r.status === 'pending').reduce((s, r) => s + r.cost, 0);
   return Math.max(0, (S.kids[i].points || 0) - held);
 }
-function screen(i) {
-  const k = S.kids[i];
-  const total = (S.screenTimeBase || 360) + (k.screenMinsBonus || 0);
-  const used = k.screenMinsUsed || 0;
-  return { total, used, left: Math.max(0, total - used), pct: total ? Math.min(100, used / total * 100) : 0 };
-}
 const pendingCounts = () => ({
   chores: S.chores.filter(c => c.status === 'pending').length,
   acts: S.pointSubmissions.filter(p => p.status === 'pending').length,
@@ -605,18 +599,6 @@ function allowanceCard(i, compact) {
     </div></div>`;
 }
 
-function screenCard(i, compact) {
-  const s = screen(i);
-  const cls = s.pct >= 90 ? 'danger' : s.pct >= 70 ? 'warn' : '';
-  return `<div class="card">
-    <div class="card-head"><div><div class="card-title">📱 Screen time</div><div class="card-sub">${compact ? esc(S.names[i]) + ' · ' : ''}Honor system — log it as you go</div></div>
-    <div style="text-align:right"><div class="money-big" style="font-size:1.7rem">${mins(s.left)}</div><div class="small muted bold">left this week</div></div></div>
-    <div class="bar"><div class="bar-fill ${cls}" style="width:${s.pct}%"></div></div>
-    <div class="bar-labels"><span>${mins(s.used)} used</span><span>${mins(s.total)} total${S.kids[i].screenMinsBonus ? ' (incl. +' + mins(S.kids[i].screenMinsBonus) + ' earned)' : ''}</span></div>
-    <div class="btn-row mt12"><button class="btn sm white" data-act="screen" data-k="${i}" data-n="-30">−30m</button><button class="btn sm soft" data-act="screen" data-k="${i}" data-n="30">+30m used</button></div>
-  </div>`;
-}
-
 function gradesBlock(i) {
   const kid = S.kids[i];
   return `<div class="grades">${SUBJECTS.map(s => {
@@ -687,7 +669,7 @@ function kidTodayView(i) {
       <div class="stat"><div class="stat-ico bg-red">🔥</div><div class="stat-val">${streak(i)} day${streak(i) === 1 ? '' : 's'}</div><div class="stat-lbl">Streak · ${lvl}</div></div>
       <div class="stat"><div class="stat-ico bg-blue">🎯</div><div class="stat-val">${done} of ${list.length}</div><div class="stat-lbl">Today's chores</div></div>
     </div>
-    <div class="wide-only col">${allowanceCard(i)}${screenCard(i)}</div>
+    <div class="wide-only col">${allowanceCard(i)}</div>
   </div>`;
 
   const tryN = sentBack.filter(c => !c.missed).length, missN = sentBack.length - tryN;
@@ -700,7 +682,7 @@ function kidTodayView(i) {
     <div class="seg">${[['today', 'Today'], ['todo', 'To do'], ['done', 'Done']].map(([k, l]) => `<button class="${seg === k ? 'active' : ''}" data-act="seg" data-seg="${k}">${l}</button>`).join('')}</div>
     <div class="list">${shown.length ? shown.map(c => choreRow(c, 'kid')).join('') : `<div class="card empty"><span class="big">${seg === 'done' ? '🌱' : '🎉'}</span>${seg === 'done' ? 'Nothing checked off yet.' : 'Nothing here — nice!'}</div>`}</div>
     <div class="hint">Tap the circle when you finish a chore. Tap again to undo.</div>
-    <div class="narrow-only col">${allowanceCard(i)}${screenCard(i)}</div>
+    <div class="narrow-only col">${allowanceCard(i)}</div>
     <div class="grid2">${nextRewardCard(i)}${teamCard(false)}</div>
   </div>`;
   return `<div class="split">${left}${right}</div><div class="foot">Designed for real life, not perfect days. 💜</div>`;
@@ -748,14 +730,13 @@ function kidRewardsView(i) {
     ${mine.length ? `<div class="card"><div class="card-title">⏳ Waiting for a parent</div><div class="list mt12">${mine.map(r => `<div class="line bold"><span>${esc(r.name)} · ${r.cost} pts</span><button class="ibtn ghost" data-act="req-cancel" data-id="${r.id}">Cancel</button></div>`).join('')}</div></div>` : ''}
     ${recent.length ? `<div class="card"><div class="card-title">Recent</div><div class="list mt12">${recent.map(r => `<div class="line bold"><span>${esc(r.name)}</span><span class="tag ${r.status === 'approved' ? 'ok' : 'no'}">${r.status === 'approved' ? 'granted' : 'not this time'}</span></div>`).join('')}</div></div>` : ''}
   </div><div class="col">
-    <div><div class="section-title">Rewards 🎁</div><div class="section-sub">Points reset every new week — spend them!</div></div>
+    <div><div class="section-title">Rewards 🎁</div><div class="section-sub">Points carry over week to week. Save up or spend them!</div></div>
     <div class="list">${list.map(r => {
       const ok = pts >= r.cost;
       return `<div class="reward-row ${ok ? '' : 'locked'}"><div class="ico bg-gold">${/screen/i.test(r.name) ? '📺' : '🎁'}</div>
         <div class="ci"><div class="cn">${esc(r.name)}</div><div class="cm">${ok ? 'You can get this!' : (r.cost - pts) + ' more points'}</div></div>
         <span class="pill">${r.cost} pts</span><button class="btn sm" data-act="redeem" data-k="${i}" data-id="${r.id}" ${ok ? '' : 'disabled'}>Redeem</button></div>`;
     }).join('') || '<div class="card empty">No rewards yet — ask a parent to add some.</div>'}</div>
-    ${screenCard(i)}
   </div></div>`;
 }
 
@@ -875,7 +856,7 @@ function parentInboxView() {
 }
 
 function kidSummaryCard(i, small) {
-  const p = payoutParts(i), s = screen(i);
+  const p = payoutParts(i);
   const pct = Math.min(100, p.pay / S.maxPay * 100), tick = S.base / S.maxPay * 100;
   const pend = kidChores(i).filter(c => c.status === 'pending').length;
   return `<div class="card kid-card" style="--kc:var(--k${i})">
@@ -884,7 +865,7 @@ function kidSummaryCard(i, small) {
       <div class="money-big" style="font-size:1.8rem">${money(p.pay)}</div></div>
     <div class="bar"><div class="bar-fill ${p.pay < S.base ? 'warn' : ''}" style="width:${pct}%;background:${p.pay < S.base ? '' : `var(--k${i})`}"></div><div class="bar-tick" style="left:${tick}%"></div></div>
     <div class="bar-labels"><span>$0</span><span>${money(S.base)}</span><span>${money(S.maxPay)}</span></div>
-    <div class="mini-stats"><div class="mini"><b>${p.approved}/${p.total}</b><span>chores</span></div><div class="mini"><b>${S.kids[i].points}</b><span>points</span></div><div class="mini"><b>${questDoneCount(i)}</b><span>quests</span></div><div class="mini"><b>${mins(s.left)}</b><span>screen left</span></div></div>
+    <div class="mini-stats"><div class="mini"><b>${p.approved}/${p.total}</b><span>chores</span></div><div class="mini"><b>${S.kids[i].points}</b><span>points</span></div><div class="mini"><b>${questDoneCount(i)}</b><span>quests</span></div></div>
     ${penaltyNotice(i, true)}
     ${small ? '' : `<div class="lines">
       <div class="line"><span>Chores (${!p.total ? '—' : p.weighted ? money(p.val) + ' per 1×' : money(p.val) + ' each'})</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
@@ -892,7 +873,6 @@ function kidSummaryCard(i, small) {
       <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
       <div class="line total"><span>Pay this week</span><span>${money(p.pay)}</span></div></div>
     <div class="adjust"><span class="lbl">⭐ Points</span><button class="ibtn" data-act="pts" data-k="${i}" data-n="-10">−10</button><button class="ibtn" data-act="pts" data-k="${i}" data-n="-5">−5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="5">+5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="10">+10</button></div>
-    <div class="adjust"><span class="lbl">📱 Screen used (${mins(s.used)}/${mins(s.total)})</span><button class="ibtn" data-act="screen" data-k="${i}" data-n="-30">−30m</button><button class="ibtn ok" data-act="screen" data-k="${i}" data-n="30">+30m</button></div>
     <div class="mt16">${gradesBlock(i)}</div>`}
     <button class="btn block danger mt12" data-act="pen-open" data-k="${i}">⚠️ Disrespect — wipe this week's allowance</button>
   </div>`;
@@ -1044,7 +1024,6 @@ function parentSettingsView() {
       <div class="form-row"><div class="field"><label>Kid 1 name</label><input id="sName0" type="text" value="${esc(S.names[0])}"></div><div class="field"><label>Emoji</label><input id="sEmo0" type="text" value="${esc(S.emojis[0])}"></div></div>
       <div class="form-row"><div class="field"><label>Kid 2 name</label><input id="sName1" type="text" value="${esc(S.names[1])}"></div><div class="field"><label>Emoji</label><input id="sEmo1" type="text" value="${esc(S.emojis[1])}"></div></div>
       <div class="form-row"><div class="field"><label>Base pay ($)</label><input id="sBase" type="number" value="${S.base}"></div><div class="field"><label>Max pay ($)</label><input id="sMax" type="number" value="${S.maxPay}"></div></div>
-      <div class="field"><label>Weekly screen time (hours)</label><input id="sScreen" type="number" step="0.5" value="${(S.screenTimeBase || 360) / 60}"></div>
       <button class="btn block" data-act="save-family">Save</button></div></div>
 
     <div class="card"><div class="card-title">💜 Team goal</div><div class="form mt12">
@@ -1062,7 +1041,7 @@ function parentSettingsView() {
       <div class="form-row mt12"><input id="aName" type="text" placeholder="New activity"><input id="aPts" type="number" value="10" placeholder="Points"></div>
       <button class="btn block soft mt8" data-act="activity-add">+ Add activity</button></div>
 
-    <div class="card"><div class="card-title">🎁 Reward menu</div><div class="card-sub">Screen-time rewards add minutes automatically.</div>
+    <div class="card"><div class="card-title">🎁 Reward menu</div><div class="card-sub">What the girls can spend their points on.</div>
       <div class="list mt12">${(S.rewards[0] || []).map(r => `<div class="line bold"><span>${esc(r.name)} · ${r.cost} pts</span><button class="ibtn ghost" data-act="reward-del" data-name="${esc(r.name)}">🗑</button></div>`).join('')}</div>
       <div class="form-row mt12"><input id="rName" type="text" placeholder="New reward"><input id="rCost" type="number" value="20" placeholder="Cost"></div>
       <button class="btn block soft mt8" data-act="reward-add">+ Add reward</button></div>
@@ -1484,19 +1463,12 @@ const A = {
     const r = S.pendingRewards.find(x => x.id === id); if (!r) return;
     const k = S.kids[r.kidIdx];
     k.points = Math.max(0, (k.points || 0) - r.cost);
-    const n = r.name.toLowerCase();
-    if (/screen/.test(n)) {
-      const m = /(\d+)\s*(min|hour|hr)/.exec(n);
-      const add = m ? Number(m[1]) * (/hour|hr/.test(m[2]) ? 60 : 1) : 30;
-      k.screenMinsBonus = (k.screenMinsBonus || 0) + add;
-    }
     r.status = 'approved'; r.decidedAt = now();
     log('Granted "' + r.name + '" to ' + S.names[r.kidIdx]); confetti(); commit('Granted 🎁');
   },
   deny({ id }) { const r = S.pendingRewards.find(x => x.id === id); if (!r) return; r.status = 'denied'; r.decidedAt = now(); log('Denied "' + r.name + '"'); commit('Denied'); },
 
   pts({ k, n }) { const i = Number(k), kid = S.kids[i]; kid.points = Math.max(0, (kid.points || 0) + Number(n)); log(S.names[i] + ' points ' + (n > 0 ? '+' : '') + n); commit(S.names[i] + ': ' + kid.points + ' pts'); },
-  screen({ k, n }) { const i = Number(k), kid = S.kids[i]; kid.screenMinsUsed = Math.max(0, (kid.screenMinsUsed || 0) + Number(n)); log(S.names[i] + ' screen time ' + (n > 0 ? '+' : '') + n + 'm'); commit(mins(screen(i).left) + ' screen time left'); },
 
   'grades-open'() {
     openModal(`<div class="modal-title">📚 Update grades</div><div class="small muted bold">Compared to last week's grades. Baselines reset when you start a new week.</div>
@@ -1510,11 +1482,11 @@ const A = {
   },
 
   'new-week'() {
-    requirePin(() => confirmModal('Start a new week?', 'Clears this week\'s chores and any disrespect penalty, resets points, screen time and the team goal, makes current grades the new baseline, and loads the ' + (S.breakMode ? '🎄 break-week' : '📌 school-week') + ' chores. You\'ll have 30 seconds to undo.' + (S.breakMode ? ' (Break mode is ON. Turn it off in Settings when school starts.)' : ''), 'Start new week', () => {
+    requirePin(() => confirmModal('Start a new week?', 'Clears this week\'s chores and any disrespect penalty, resets the team goal, makes current grades the new baseline, and loads the ' + (S.breakMode ? '🎄 break-week' : '📌 school-week') + ' chores. You\'ll have 30 seconds to undo.' + (S.breakMode ? ' (Break mode is ON. Turn it off in Settings when school starts.)' : ''), 'Start new week', () => {
       const snap = JSON.stringify(S);
       S.kids.forEach(k => {
         SUBJECTS.forEach(s => { k.subjects[s].baseline = k.subjects[s].current; });
-        k.points = 0; k.weekPoints = 0; k.screenMinsUsed = 0; k.screenMinsBonus = 0;
+        k.weekPoints = 0; // points carry over week to week
       });
       S.chores = [];
       S.penalties = [];
@@ -1532,8 +1504,8 @@ const A = {
   'save-family'() {
     S.names[0] = el('sName0').value.trim() || S.names[0]; S.names[1] = el('sName1').value.trim() || S.names[1];
     S.emojis[0] = el('sEmo0').value.trim() || S.emojis[0]; S.emojis[1] = el('sEmo1').value.trim() || S.emojis[1];
-    const base = parseFloat(el('sBase').value), max = parseFloat(el('sMax').value), scr = parseFloat(el('sScreen').value);
-    if (base > 0) S.base = base; if (max >= S.base) S.maxPay = max; if (scr > 0) S.screenTimeBase = Math.round(scr * 60);
+    const base = parseFloat(el('sBase').value), max = parseFloat(el('sMax').value);
+    if (base > 0) S.base = base; if (max >= S.base) S.maxPay = max;
     log('Settings updated'); commit('Saved');
   },
   'goal-save'() {
@@ -1585,8 +1557,8 @@ const A = {
     } catch (e) { toast('Wrong passphrase or broken backup'); }
   },
   'clear-test'() {
-    confirmModal('Clear test data?', 'Removes this week\'s chores, claims and reward requests, and resets screen time. Names, grades, bank and menus stay.', 'Clear', () => {
-      undoable('Test data cleared', () => { S.chores = []; S.penalties = []; S.pointSubmissions = []; S.pendingRewards = []; S.teamPoints = 0; S.kids.forEach(k => { k.screenMinsUsed = 0; k.screenMinsBonus = 0; }); log('Test data cleared'); });
+    confirmModal('Clear test data?', 'Removes this week\'s chores, claims and reward requests. Names, grades, bank and menus stay.', 'Clear', () => {
+      undoable('Test data cleared', () => { S.chores = []; S.penalties = []; S.pointSubmissions = []; S.pendingRewards = []; S.teamPoints = 0;  log('Test data cleared'); });
     }, true);
   },
   'clear-all'() {
