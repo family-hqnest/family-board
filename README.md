@@ -5,12 +5,12 @@ Live at **https://family.hqnest.com** (Cloudflare Pages — every push to `main`
 
 ## How it works
 - **Kids** pick their name under *Who's here?* and tap the circle when a chore is done. Tap again to undo.
-- **Parent** taps 🔒 Parent and enters the PIN to approve chores, bonus activities and reward requests, add chores, update grades and start a new week.
-- **Allowance:** $20 base split across each girl's chores. A chore sent back to try again loses its share. Extra-credit chores add up to +$5; each improved grade adds $1.25 (up to +$5). Max $30.
+- **Parent** taps 🔒 Parent and enters the PIN to approve chores, bonus activities and reward requests, add chores and start a new week.
+- **Allowance:** $20 base split across each girl's chores. A chore sent back to try again loses its share. Extra-credit chores and Skill Quests add up to +$10. Max $30.
 - **Points:** bonus activities earn points to spend on rewards. Screen-time rewards add minutes automatically. Points reset each new week.
 - **Rare chores** pay bonus points instead of money and don't change what regular chores are worth.
 - **📌 Every week:** in the chore bank, pin a chore for Sofia, Juliana or both. Pinned chores load automatically on New Week.
-- **Disrespect:** Parent → Family → ⚠️ wipes that girl's chore money and grade bonus for the week. Extra-credit chores can still earn up to $5 back. She sees your note. Cleared on New Week.
+- **Disrespect:** Parent → Family → ⚠️ wipes that girl's chore money for the week. Extra credit and quests can still earn up to $10 back. She sees your note. Cleared on New Week.
 - **Team goal:** every approved chore adds 10 points, and bonus activities add their points, toward a shared family reward.
 
 ## Files

@@ -19,7 +19,6 @@ const TEAM_PTS_PER_CHORE = 10;
 const SUBJECTS  = ['Math', 'English', 'Science', 'History'];
 const DAYS      = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const LEVELS    = ['Rookie', 'Rising Star', 'Champion', 'Legend', 'Superstar'];
-const gradeRank = { A: 4, B: 3, C: 2, D: 1, F: 0 };
 const KID_CLS   = ['k0', 'k1'];
 
 const now     = () => Date.now();
@@ -344,11 +343,10 @@ const tabKey = () => inParent() ? 'parent' : 'kid';
 
 // ── PAYOUT MATH ──────────────────────────────────────────────
 // $20 base split across the kid's regular chores. Rejected chores
-// lose their share. Extra-credit chores add up to +$5, grade
-// improvement adds $1.25 per improved subject (up to +$5).
-// Rare chores pay bonus points instead of money.
-// Disrespect: the week's chore money and grade bonus go to $0;
-// extra-credit chores can still earn some back.
+// lose their share. Extra-credit chores and Skill Quests add up to
+// +$10 (EXTRA_CAP). Rare chores pay bonus points instead of money.
+// Disrespect: the week's chore money goes to $0; extra credit and
+// quests can still earn some back.
 const isRegular = c => !c.extra && !c.rare;
 const committedChores = i => S.chores.filter(c => c.kid === i && isRegular(c));
 const penaltiesFor = i => (S.penalties || []).filter(p => p.kid === i);
@@ -357,19 +355,6 @@ const cw = c => Math.max(1, Math.min(3, Number(c.weight) || 1));
 const totalWeight = i => committedChores(i).reduce((s, c) => s + cw(c), 0);
 function choreValue(i) { const w = totalWeight(i); return w ? S.base / w : 0; }
 const choreShare = c => isKid(c.kid) && isRegular(c) ? choreValue(c.kid) * cw(c) : 0;
-function gradeImprovementBonus(kid) {
-  let b = 0;
-  SUBJECTS.forEach(s => { if ((gradeRank[kid.subjects[s].current] || 0) > (gradeRank[kid.subjects[s].baseline] || 0)) b += 1.25; });
-  return Math.min(5, b);
-}
-function gradeGrowthPct(kid) {
-  let score = 0, max = 0;
-  SUBJECTS.forEach(s => {
-    const b = gradeRank[kid.subjects[s].baseline] || 0, c = gradeRank[kid.subjects[s].current] || 0;
-    score += Math.max(0, b * 5 + (c - b) * 10); max += 60;
-  });
-  return max ? Math.round(score / max * 100) : 0;
-}
 function payoutParts(i) {
   const total = committedChores(i).length, val = choreValue(i);
   const rejList = S.chores.filter(c => c.kid === i && isRegular(c) && c.status === 'rejected');
@@ -377,18 +362,16 @@ function payoutParts(i) {
   const weighted = committedChores(i).some(c => cw(c) > 1);
   const penalties = penaltiesFor(i), wiped = penalties.length > 0;
   const choreBefore = Math.max(0, S.base - rejectedAmt);
-  const gradeBefore = gradeImprovementBonus(S.kids[i]);
   const choreEarned = wiped ? 0 : choreBefore;
-  const grade = wiped ? 0 : gradeBefore;
   const extraChores = S.chores.filter(c => c.kid === i && c.extra && c.status === 'approved').reduce((s, c) => s + (c.bonusDollars || 0), 0);
   const questMoney = questEarnedThisWeek(i);
   const extra = Math.min(EXTRA_CAP, extraChores + questMoney);
-  const pay = Math.max(0, Math.min(S.maxPay, choreEarned + extra + grade));
+  const pay = Math.max(0, Math.min(S.maxPay, choreEarned + extra));
   const approved = S.chores.filter(c => c.kid === i && isRegular(c) && c.status === 'approved').length;
-  return { total, val, weighted, rejected, choreEarned, extra, extraChores, questMoney, grade, pay, approved, wiped, penalties, lost: wiped ? choreBefore + gradeBefore : 0, choreBefore };
+  return { total, val, weighted, rejected, choreEarned, extra, extraChores, questMoney, pay, approved, wiped, penalties, lost: wiped ? choreBefore : 0, choreBefore };
 }
 const kidPayout = i => payoutParts(i).pay;
-const EXTRA_CAP = 5;
+const EXTRA_CAP = 10;
 const questEarnedThisWeek = i => (S.questLog || []).filter(e => e.kid === i && e.status === 'approved' && e.week === S.week).reduce((s, e) => s + (e.pay || 0), 0);
 // Pins: 📌 school weeks use b.auto, 🎄 break weeks use b.autoBreak.
 const pinField = () => S.breakMode ? 'autoBreak' : 'auto';
@@ -576,8 +559,8 @@ function penaltyNotice(i, parent) {
   const items = ps.map(x => `<div class="pen-item"><div><b>${esc(new Date(x.at).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' }))}</b>${x.note ? ` — “${esc(x.note)}”` : ''}</div>
     ${parent ? `<button class="ibtn ghost" data-act="pen-del" data-id="${x.id}" title="Remove">✕</button>` : ''}</div>`).join('');
   return `<div class="penalty"><div class="pen-head">⚠️ ${parent ? 'Disrespect this week' : 'Allowance on hold this week'}</div>
-    <div class="pen-text">${parent ? `Chore money and grade bonus are $0 (−${money(p.lost)}). Extra-credit chores can still earn up to $5 back.`
-      : `Being disrespectful to Mom or Dad wipes this week's allowance. You can still earn some back with ⭐ extra-credit chores.`}</div>${items}</div>`;
+    <div class="pen-text">${parent ? `Chore money is $0 (−${money(p.lost)}). Extra credit and quests can still earn up to ${money(EXTRA_CAP)} back.`
+      : `Being disrespectful to Mom or Dad wipes this week's allowance. You can still earn some back with ⭐ extra-credit chores and Skill Quests.`}</div>${items}</div>`;
 }
 
 function allowanceCard(i, compact) {
@@ -594,18 +577,8 @@ function allowanceCard(i, compact) {
       <div class="line"><span>Chores (${p.approved}/${p.total} approved · ${!p.total ? '—' : p.weighted ? money(p.val) + ' per 1×' : money(p.val) + ' each'})</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
       ${p.rejected ? `<div class="line"><span>Try-again chores (${p.rejected})</span><span class="minus">−${money(S.base - p.choreBefore)}</span></div>` : ''}
       <div class="line"><span>Extra credit${p.questMoney ? ' & quests' : ''}${p.extraChores + p.questMoney > EXTRA_CAP ? ' (max $' + EXTRA_CAP + ')' : ''}</span><span class="plus">+${money(p.extra)}</span></div>
-      <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
       <div class="line total"><span>This week</span><span>${money(p.pay)}</span></div>
     </div></div>`;
-}
-
-function gradesBlock(i) {
-  const kid = S.kids[i];
-  return `<div class="grades">${SUBJECTS.map(s => {
-    const c = kid.subjects[s].current, b = kid.subjects[s].baseline, d = (gradeRank[c] || 0) - (gradeRank[b] || 0);
-    const t = d > 0 ? '<span class="t plus">▲ +$1.25</span>' : d < 0 ? '<span class="t minus">▼</span>' : '<span class="t muted">—</span>';
-    return `<div class="grade"><div class="s">${s}</div><div class="g g${c}">${c}</div>${t}</div>`;
-  }).join('')}</div>`;
 }
 
 function teamCard(compact) {
@@ -715,7 +688,6 @@ function kidChoresView(i) {
         <button class="btn sm soft" data-act="act-did" data-id="${a.id}">I did it</button></div>`).join('') || '<div class="empty">No activities yet.</div>'}</div>
       ${mySubs.length ? `<div class="mt16"><div class="lbl">Waiting for a parent</div><div class="list mt8">${mySubs.map(p => `<div class="line bold"><span>⏳ ${esc(p.activityName)} · +${p.points}</span><button class="ibtn ghost" data-act="sub-cancel" data-id="${p.id}">Cancel</button></div>`).join('')}</div></div>` : ''}
     </div>
-    <div class="card"><div class="card-title">📚 My grades</div><div class="card-sub">Better than last check-in = +$1.25 per subject</div><div class="mt12">${gradesBlock(i)}</div></div>
   </div>`;
   return `<div class="split">${left}${right}</div>`;
 }
@@ -861,7 +833,7 @@ function kidSummaryCard(i, small) {
   const pend = kidChores(i).filter(c => c.status === 'pending').length;
   return `<div class="card kid-card" style="--kc:var(--k${i})">
     <div class="kid-head"><span class="av lg" style="--soft:var(--k${i}-soft)">${esc(S.emojis[i])}</span>
-      <div style="flex:1"><div class="kid-name">${esc(S.names[i])}</div><div class="card-sub">${pend} waiting · ${gradeGrowthPct(S.kids[i])}% grade growth</div></div>
+      <div style="flex:1"><div class="kid-name">${esc(S.names[i])}</div><div class="card-sub">${pend} waiting for your OK</div></div>
       <div class="money-big" style="font-size:1.8rem">${money(p.pay)}</div></div>
     <div class="bar"><div class="bar-fill ${p.pay < S.base ? 'warn' : ''}" style="width:${pct}%;background:${p.pay < S.base ? '' : `var(--k${i})`}"></div><div class="bar-tick" style="left:${tick}%"></div></div>
     <div class="bar-labels"><span>$0</span><span>${money(S.base)}</span><span>${money(S.maxPay)}</span></div>
@@ -870,10 +842,8 @@ function kidSummaryCard(i, small) {
     ${small ? '' : `<div class="lines">
       <div class="line"><span>Chores (${!p.total ? '—' : p.weighted ? money(p.val) + ' per 1×' : money(p.val) + ' each'})</span><span>${p.wiped ? '<s class="muted">' + money(p.choreBefore) + '</s> ' : ''}${money(p.choreEarned)}</span></div>
       <div class="line"><span>Extra credit${p.questMoney ? ' (incl. ' + money(p.questMoney) + ' quests)' : ''}</span><span class="plus">+${money(p.extra)}</span></div>
-      <div class="line"><span>Grade improvement</span><span class="plus">+${money(p.grade)}</span></div>
       <div class="line total"><span>Pay this week</span><span>${money(p.pay)}</span></div></div>
-    <div class="adjust"><span class="lbl">⭐ Points</span><button class="ibtn" data-act="pts" data-k="${i}" data-n="-10">−10</button><button class="ibtn" data-act="pts" data-k="${i}" data-n="-5">−5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="5">+5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="10">+10</button></div>
-    <div class="mt16">${gradesBlock(i)}</div>`}
+    <div class="adjust"><span class="lbl">⭐ Points</span><button class="ibtn" data-act="pts" data-k="${i}" data-n="-10">−10</button><button class="ibtn" data-act="pts" data-k="${i}" data-n="-5">−5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="5">+5</button><button class="ibtn ok" data-act="pts" data-k="${i}" data-n="10">+10</button></div>`}
     <button class="btn block danger mt12" data-act="pen-open" data-k="${i}">⚠️ Disrespect — wipe this week's allowance</button>
   </div>`;
 }
@@ -953,7 +923,7 @@ function journalCard() {
 function parentFamilyView() {
   return `<div class="stack">
     <div class="card-head" style="margin:0"><div><div class="section-title">Family</div><div class="section-sub">Week of ${esc(S.week)} · total payout ${money(kidPayout(0) + kidPayout(1))}</div></div>
-      <div class="btn-row"><button class="btn sm soft" data-act="grades-open">📚 Update grades</button><button class="btn sm danger" data-act="new-week">🔄 New week</button></div></div>
+      <div class="btn-row"><button class="btn sm danger" data-act="new-week">🔄 New week</button></div></div>
     <div class="split even">${kidSummaryCard(0, false)}${kidSummaryCard(1, false)}</div>
     <div class="split even">${teamCard(true)}
       ${journalCard()}
@@ -1411,7 +1381,7 @@ const A = {
     const i = Number(k); penKid = i;
     const p = payoutParts(i);
     openModal(`<div class="modal-title">⚠️ Disrespect — ${esc(S.names[i])}</div>
-      <div class="muted bold">This wipes ${esc(S.names[i])}'s chore money and grade bonus for the week (${money(p.choreBefore + gradeImprovementBonus(S.kids[i]))} right now). Extra-credit chores can still earn up to $5 back. Points and screen time aren't touched.</div>
+      <div class="muted bold">This wipes ${esc(S.names[i])}'s chore money for the week (${money(p.choreBefore)} right now). Extra credit and quests can still earn up to ${money(EXTRA_CAP)} back. Points aren't touched.</div>
       <div class="field"><label for="penNote">Note she'll see (optional)</label><input id="penNote" type="text" maxlength="120" placeholder="e.g. Talked back at dinner"></div>
       <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn danger" data-act="pen-save">Wipe this week</button></div>`);
   },
@@ -1426,7 +1396,7 @@ const A = {
   },
   'pen-del'({ id }) {
     const x = S.penalties.find(p => p.id === id); if (!x) return;
-    confirmModal('Remove this penalty?', S.names[x.kid] + "'s chore money and grade bonus come back.", 'Remove', () => {
+    confirmModal('Remove this penalty?', S.names[x.kid] + "'s chore money comes back.", 'Remove', () => {
       S.penalties = S.penalties.filter(p => p.id !== id); log('Removed penalty for ' + S.names[x.kid]); commit('Penalty removed');
     });
   },
@@ -1470,22 +1440,11 @@ const A = {
 
   pts({ k, n }) { const i = Number(k), kid = S.kids[i]; kid.points = Math.max(0, (kid.points || 0) + Number(n)); log(S.names[i] + ' points ' + (n > 0 ? '+' : '') + n); commit(S.names[i] + ': ' + kid.points + ' pts'); },
 
-  'grades-open'() {
-    openModal(`<div class="modal-title">📚 Update grades</div><div class="small muted bold">Compared to last week's grades. Baselines reset when you start a new week.</div>
-      ${[0, 1].map(i => `<div class="card tight" style="box-shadow:none;background:#faf9fe"><div class="kid-name" style="--kc:var(--k${i})">${esc(S.emojis[i])} ${esc(S.names[i])}</div>
-        <div class="grades mt8">${SUBJECTS.map(s => `<div class="field"><label class="small">${s}</label><select data-gk="${i}" data-gs="${s}">${['A', 'B', 'C', 'D', 'F'].map(g => `<option ${S.kids[i].subjects[s].current === g ? 'selected' : ''}>${g}</option>`).join('')}</select><span class="small muted">was ${S.kids[i].subjects[s].baseline}</span></div>`).join('')}</div></div>`).join('')}
-      <div class="modal-btns"><button class="btn white" data-act="modal-close">Cancel</button><button class="btn" data-act="grades-save">Save grades</button></div>`);
-  },
-  'grades-save'() {
-    document.querySelectorAll('[data-gk]').forEach(sel => { S.kids[Number(sel.dataset.gk)].subjects[sel.dataset.gs].current = sel.value; });
-    log('Grades updated'); closeModal(); commit('Grades saved');
-  },
 
   'new-week'() {
-    requirePin(() => confirmModal('Start a new week?', 'Clears this week\'s chores and any disrespect penalty, resets the team goal, makes current grades the new baseline, and loads the ' + (S.breakMode ? '🎄 break-week' : '📌 school-week') + ' chores. You\'ll have 30 seconds to undo.' + (S.breakMode ? ' (Break mode is ON. Turn it off in Settings when school starts.)' : ''), 'Start new week', () => {
+    requirePin(() => confirmModal('Start a new week?', 'Clears this week\'s chores and any disrespect penalty, resets the team goal, and loads the ' + (S.breakMode ? '🎄 break-week' : '📌 school-week') + ' chores. You\'ll have 30 seconds to undo.' + (S.breakMode ? ' (Break mode is ON. Turn it off in Settings when school starts.)' : ''), 'Start new week', () => {
       const snap = JSON.stringify(S);
       S.kids.forEach(k => {
-        SUBJECTS.forEach(s => { k.subjects[s].baseline = k.subjects[s].current; });
         k.weekPoints = 0; // points carry over week to week
       });
       S.chores = [];
@@ -1557,12 +1516,12 @@ const A = {
     } catch (e) { toast('Wrong passphrase or broken backup'); }
   },
   'clear-test'() {
-    confirmModal('Clear test data?', 'Removes this week\'s chores, claims and reward requests. Names, grades, bank and menus stay.', 'Clear', () => {
+    confirmModal('Clear test data?', 'Removes this week\'s chores, claims and reward requests. Names, points, bank and menus stay.', 'Clear', () => {
       undoable('Test data cleared', () => { S.chores = []; S.penalties = []; S.pointSubmissions = []; S.pendingRewards = []; S.teamPoints = 0;  log('Test data cleared'); });
     }, true);
   },
   'clear-all'() {
-    requirePin(() => confirmModal('Erase EVERYTHING?', 'Every chore, bank item, grade, point and setting — on all devices. Export a backup first if you might want it.', 'Erase all', () => {
+    requirePin(() => confirmModal('Erase EVERYTHING?', 'Every chore, bank item, point and setting — on all devices. Export a backup first if you might want it.', 'Erase all', () => {
       undoable('Everything erased', () => { const pin = S.pin; S = defaultState(); S.pin = pin; log('All data cleared'); });
     }, true), 'PIN to erase data');
   },
